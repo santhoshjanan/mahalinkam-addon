@@ -48,6 +48,26 @@ it('lookup cache re-invokes after the TTL elapses', async () => {
   expect(spy).toHaveBeenCalledTimes(2);
 });
 
+it('lookup cache .set primes an entry without calling lookupFn', async () => {
+  const spy = vi.fn(async () => ({ found: false }));
+  const cache = makeLookupCache(spy, 1000);
+  expect(await cache('https://a.test/p')).toEqual({ found: false }); // miss
+  expect(spy).toHaveBeenCalledTimes(1);
+  cache.set('https://a.test/p', { found: true });
+  expect(await cache('https://a.test/p?utm_source=x')).toEqual({ found: true });
+  expect(spy).toHaveBeenCalledTimes(1); // no further lookup
+});
+
+it('lookup cache .invalidate forces the next call to re-fetch', async () => {
+  const spy = vi.fn(async () => ({ found: true }));
+  const cache = makeLookupCache(spy, 1000);
+  await cache('https://a.test/p');
+  expect(spy).toHaveBeenCalledTimes(1);
+  cache.invalidate('https://a.test/p');
+  await cache('https://a.test/p');
+  expect(spy).toHaveBeenCalledTimes(2);
+});
+
 it('lookup cache does not cache a rejected lookup', async () => {
   const spy = vi
     .fn<() => Promise<{ found: boolean }>>()

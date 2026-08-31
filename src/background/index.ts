@@ -32,6 +32,13 @@ const ICON_DEBOUNCE_MS = 400;
 /** Single shared lookup cache for the worker's lifetime (60s TTL). */
 const lookupCached = makeLookupCache((u: string) => apiClient.lookup(u), 60_000);
 
+// Give the "!" (not-configured) badge a legible dark-red background once.
+try {
+  void browser.action.setBadgeBackgroundColor({ color: '#b91c1c' });
+} catch {
+  /* action namespace unavailable in this context */
+}
+
 // ---------------------------------------------------------------------------
 // Context menus
 // ---------------------------------------------------------------------------
@@ -50,16 +57,23 @@ browser.runtime.onInstalled.addListener(() => {
 });
 
 function notify(message: string): void {
-  void browser.notifications
-    .create({
-      type: 'basic',
-      iconUrl: browser.runtime.getURL('src/assets/icon-128.png'),
-      title: 'mahalinkam',
-      message,
-    })
-    .catch(() => {
-      /* notifications permission may be absent; nothing else to do */
-    });
+  // `browser.notifications` is `undefined` in a browser where the permission is
+  // absent — reading `.create` off it throws synchronously, so the whole call
+  // (not just the returned promise) has to be guarded.
+  try {
+    void browser.notifications
+      .create({
+        type: 'basic',
+        iconUrl: browser.runtime.getURL('src/assets/icon-128.png'),
+        title: 'mahalinkam',
+        message,
+      })
+      .catch(() => {
+        /* notifications disabled at runtime; degrade quietly */
+      });
+  } catch {
+    /* notifications namespace unavailable; degrade quietly */
+  }
 }
 
 /** Map a thrown value to a user-facing notification string. */
@@ -72,7 +86,12 @@ function errorMessage(err: unknown): string {
   return 'Could not save — something went wrong';
 }
 
-async function saveUrl(url: string | undefined): Promise<void> {
+/**
+ * Save `url` via the API and notify the result. When `iconTabId` is given (the
+ * "save page" path, where the saved URL IS the active tab) the toolbar icon for
+ * that tab is refreshed immediately instead of waiting out the lookup TTL.
+ */
+async function saveUrl(url: string | undefined, iconTabId?: number): Promise<void> {
   if (!url) {
     notify('Nothing to save here');
     return;
@@ -83,6 +102,9 @@ async function saveUrl(url: string | undefined): Promise<void> {
   }
   try {
     const { alreadySaved } = await apiClient.createBookmark({ url });
+    // Bust the stale "not saved" cache entry so the icon reflects reality now.
+    lookupCached.set(url, { found: true });
+    if (iconTabId !== undefined) void updateIconForTab(iconTabId, url);
     notify(alreadySaved ? 'Already saved' : 'Saved');
   } catch (err) {
     notify(errorMessage(err));
@@ -91,7 +113,7 @@ async function saveUrl(url: string | undefined): Promise<void> {
 
 browser.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === MENU_SAVE_PAGE) {
-    void saveUrl(tab?.url);
+    void saveUrl(tab?.url, tab?.id);
   } else if (info.menuItemId === MENU_SAVE_LINK) {
     void saveUrl(typeof info.linkUrl === 'string' ? info.linkUrl : undefined);
   }

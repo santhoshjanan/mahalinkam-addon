@@ -42,6 +42,15 @@ interface CacheEntry<T> {
   promise: Promise<T>;
 }
 
+export interface LookupCache<T> {
+  /** Look up `url`, using the cached result when younger than `ttlMs`. */
+  (url: string): Promise<T>;
+  /** Prime the cache for `url` with a known value (e.g. right after a save). */
+  set(url: string, value: T): void;
+  /** Drop any cached entry for `url`. */
+  invalidate(url: string): void;
+}
+
 /**
  * Wrap a lookup function in a `Map`-backed TTL cache.
  *
@@ -55,10 +64,10 @@ interface CacheEntry<T> {
 export function makeLookupCache<T extends { found: boolean; bookmark?: unknown }>(
   lookupFn: (url: string) => Promise<T>,
   ttlMs: number,
-): (url: string) => Promise<T> {
+): LookupCache<T> {
   const cache = new Map<string, CacheEntry<T>>();
 
-  return async (url: string): Promise<T> => {
+  const run = async (url: string): Promise<T> => {
     const key = cacheKey(url);
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < ttlMs) {
@@ -79,4 +88,13 @@ export function makeLookupCache<T extends { found: boolean; bookmark?: unknown }
       throw err;
     }
   };
+
+  const fn = run as LookupCache<T>;
+  fn.set = (url: string, value: T): void => {
+    cache.set(cacheKey(url), { at: Date.now(), promise: Promise.resolve(value) });
+  };
+  fn.invalidate = (url: string): void => {
+    cache.delete(cacheKey(url));
+  };
+  return fn;
 }
