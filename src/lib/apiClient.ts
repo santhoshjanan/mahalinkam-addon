@@ -44,6 +44,19 @@ export interface Tag {
   bookmarks_count?: number;
 }
 
+/**
+ * Body accepted by `PATCH /api/bookmarks/{id}`. Distinct from {@link Bookmark}:
+ * `tags` here is a flat list of names (the endpoint resolves/creates them),
+ * whereas `Bookmark.tags` is the hydrated `{ id, name }[]`.
+ */
+export interface BookmarkUpdate {
+  url?: string;
+  title?: string | null;
+  description?: string | null;
+  folder_id?: number | null;
+  tags?: string[];
+}
+
 export interface Paginated<T> {
   data: T[];
   meta: { current_page: number; last_page: number; total: number; per_page: number };
@@ -158,7 +171,7 @@ export const apiClient = {
     return { found: Boolean(payload.found), bookmark: payload.bookmark ?? undefined };
   },
 
-  async updateBookmark(id: number, body: Partial<Bookmark>): Promise<Bookmark> {
+  async updateBookmark(id: number, body: BookmarkUpdate): Promise<Bookmark> {
     const { body: b } = await req(`/api/bookmarks/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(body),

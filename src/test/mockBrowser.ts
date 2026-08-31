@@ -23,6 +23,15 @@ export const browserMock = {
     request: vi.fn(async () => true),
     contains: vi.fn(async () => false),
   },
+  tabs: {
+    query: vi.fn(async () => [
+      { url: 'https://a.test/x', title: 'X', favIconUrl: 'https://a.test/f.png' },
+    ]),
+    create: vi.fn(),
+  },
+  runtime: {
+    openOptionsPage: vi.fn(),
+  },
   __reset() {
     for (const k of Object.keys(store)) delete store[k];
   },

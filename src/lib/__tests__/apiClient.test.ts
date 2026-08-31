@@ -106,6 +106,25 @@ it('lookup passes the url raw and normalizes the found flag', async () => {
   expect(r.bookmark?.id).toBe(3);
 });
 
+it('updateBookmark PATCHes with a flat tags name list and returns data', async () => {
+  const fn = mockFetch(200, {
+    data: { id: 12, url: 'u', normalized_url: 'u', tags: [{ id: 1, name: 'x' }] },
+  });
+  const r = await apiClient.updateBookmark(12, {
+    title: 'New',
+    folder_id: null,
+    tags: ['x', 'y'],
+  });
+
+  const [url, init] = fn.mock.calls[0];
+  expect(url).toBe('https://mhl.test/api/bookmarks/12');
+  expect(init.method).toBe('PATCH');
+  const sent = JSON.parse(String(init.body)) as { tags: string[]; folder_id: number | null };
+  expect(sent.tags).toEqual(['x', 'y']);
+  expect(sent.folder_id).toBeNull();
+  expect(r.id).toBe(12);
+});
+
 it('deleteBookmark tolerates an empty response body', async () => {
   // jsdom's Response constructor rejects the 204 null-body status, so use 200
   // with an empty string to exercise the "no body to parse" path.
