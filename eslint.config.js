@@ -39,6 +39,11 @@ export default [
         extraFileExtensions: ['.vue'],
       },
     },
+    // Prettier owns formatting; these two eslint-plugin-vue rules fight it.
+    rules: {
+      'vue/html-self-closing': 'off',
+      'vue/max-attributes-per-line': 'off',
+    },
   },
   {
     files: ['src/**/*.test.ts', 'src/**/__tests__/**/*.ts', 'src/test/**/*.ts'],

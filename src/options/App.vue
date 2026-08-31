@@ -38,11 +38,17 @@ async function saveAndVerify(): Promise<void> {
     message.value = 'Fill in both fields.';
     return;
   }
+  let parsed: URL;
   try {
-    new URL(url);
+    parsed = new URL(url);
   } catch {
     status.value = 'error';
     message.value = 'Enter a valid server URL.';
+    return;
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    status.value = 'error';
+    message.value = 'Enter an http(s) server URL.';
     return;
   }
 
