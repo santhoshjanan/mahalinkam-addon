@@ -19,6 +19,10 @@ export const browserMock = {
     },
     onChanged: { addListener: vi.fn() },
   },
+  permissions: {
+    request: vi.fn(async () => true),
+    contains: vi.fn(async () => false),
+  },
   __reset() {
     for (const k of Object.keys(store)) delete store[k];
   },
