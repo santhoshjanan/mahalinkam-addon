@@ -66,7 +66,16 @@ export function normalize(input: string): string {
       }
       const eq = seg.indexOf('=');
       const rawKey = eq === -1 ? seg : seg.slice(0, eq);
-      if (TRACKING_PARAMS.includes(decodeURIComponent(rawKey).toLowerCase())) {
+      // The server's urldecode is lenient: malformed percent-encoding (e.g. "%ZZ",
+      // a lone "%") is left as-is rather than throwing. decodeURIComponent throws a
+      // URIError on those, so fall back to the raw key to match the server.
+      let decodedKey: string;
+      try {
+        decodedKey = decodeURIComponent(rawKey);
+      } catch {
+        decodedKey = rawKey;
+      }
+      if (TRACKING_PARAMS.includes(decodedKey.toLowerCase())) {
         continue;
       }
       kept.push(seg);
