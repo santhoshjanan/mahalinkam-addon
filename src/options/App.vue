@@ -55,25 +55,33 @@ async function saveAndVerify(): Promise<void> {
   status.value = 'testing';
   message.value = 'Verifying…';
 
-  // Save BEFORE pinging: apiClient reads settings from storage on every call,
-  // so the new values must be persisted first.
-  await saveSettings({ serverUrl: url, token: tok });
-
-  const granted = await requestOriginPermission(url);
-  if (!granted) {
-    status.value = 'error';
-    message.value =
-      "Permission denied — the extension can't reach the server until you allow access to its address.";
-    return;
-  }
-
   try {
+    // Firefox requires permissions.request() to be called SYNCHRONOUSLY from the
+    // user-input handler — no `await` may run before it. So request the origin
+    // grant FIRST, then await its result.
+    const grantPromise = requestOriginPermission(url);
+    const granted = await grantPromise;
+    if (!granted) {
+      status.value = 'error';
+      message.value =
+        "Permission denied — the extension can't reach the server until you allow access to its address.";
+      return;
+    }
+
+    // Save BEFORE pinging: apiClient reads settings from storage on every call,
+    // so the new values must be persisted first.
+    await saveSettings({ serverUrl: url, token: tok });
+
     const res = await apiClient.ping();
     status.value = 'ok';
     message.value = `Connected as ${res.user.name} (${res.user.email}) — server ${res.server.version}`;
   } catch (err) {
     status.value = 'error';
     message.value = pingErrorMessage(err);
+  } finally {
+    // status must never be left stuck on 'testing' (the button's :disabled
+    // binding keys off it) — force it to a terminal state.
+    if (status.value === 'testing') status.value = 'error';
   }
 }
 </script>

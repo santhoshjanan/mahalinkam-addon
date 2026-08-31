@@ -1,8 +1,15 @@
-// Port of the server's App\Services\UrlNormalizer (spec §5.1).
-// RELEASE-BLOCKING cross-client contract: output must be byte-identical to the
-// Laravel server for every case. The fixture table in src/lib/__fixtures__/
-// url-normalizer.json must stay identical to the server's
-// app/Support/url-normalizer-fixtures.php.
+// Client-side URL normalization, modelled on the server's
+// App\Services\UrlNormalizer (spec §5.1).
+//
+// Matches the server's UrlNormalizer for every case in the shared fixture table
+// (src/lib/__fixtures__/url-normalizer.json). WHATWG `URL` and PHP `parse_url`
+// diverge on inputs outside that table (dot-segments, spaces, IDN hosts) — this
+// function is used only for a client-side cache key and is never compared
+// against server data; the server always re-normalizes the raw URL it receives.
+//
+// The shared fixture is still a release-blocking contract: it must stay
+// identical in meaning to the server's app/Support/url-normalizer-fixtures.php,
+// and a divergence there blocks release.
 
 export class InvalidUrlError extends Error {}
 

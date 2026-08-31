@@ -196,8 +196,13 @@ browser.commands.onCommand.addListener((command) => {
       await browser.action.openPopup();
     } catch {
       try {
+        // In the fallback popup window, `tabs.query({active,currentWindow})`
+        // resolves to the extension page itself — so capture the real active
+        // tab here and hand its URL to the popup via `?url=`.
+        const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+        const params = new URLSearchParams({ url: tab?.url ?? '' });
         await browser.windows.create({
-          url: browser.runtime.getURL('src/popup/index.html?mode=save'),
+          url: browser.runtime.getURL(`src/popup/index.html?${params.toString()}`),
           type: 'popup',
           width: 400,
           height: 560,
@@ -205,6 +210,34 @@ browser.commands.onCommand.addListener((command) => {
       } catch {
         /* nothing more we can do */
       }
+    }
+  })();
+});
+
+// ---------------------------------------------------------------------------
+// Popup → worker messages
+// ---------------------------------------------------------------------------
+
+/**
+ * The popup posts `{ type: 'bookmark-changed', url, saved }` right after a
+ * create / update / delete so the worker can bust its stale lookup cache and
+ * refresh the toolbar icon immediately instead of waiting out the 60s TTL.
+ */
+browser.runtime.onMessage.addListener((message: unknown) => {
+  const msg = message as { type?: unknown; url?: unknown; saved?: unknown };
+  if (msg?.type !== 'bookmark-changed' || typeof msg.url !== 'string') return;
+
+  const url = msg.url;
+  lookupCached.set(url, { found: msg.saved !== false });
+
+  void (async () => {
+    try {
+      const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+      if (tab?.id !== undefined && tab.url === url) {
+        await updateIconForTab(tab.id, tab.url);
+      }
+    } catch {
+      /* tab gone / query unavailable */
     }
   })();
 });
