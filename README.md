@@ -1,5 +1,20 @@
 # mahalinkam browser extension
 
+[![CI](https://github.com/santhoshjanan/mahalinkam-addon/actions/workflows/ci.yml/badge.svg)](https://github.com/santhoshjanan/mahalinkam-addon/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/santhoshjanan/mahalinkam-addon?sort=semver&label=release)](https://github.com/santhoshjanan/mahalinkam-addon/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/santhoshjanan/mahalinkam-addon/total?label=downloads)](https://github.com/santhoshjanan/mahalinkam-addon/releases)
+
+<!--
+  The build badge is live now (GitHub Actions). The release + downloads badges
+  populate automatically once you cut the first GitHub Release with the
+  `artifacts/mahalinkam-<version>-<target>.zip` files attached.
+
+  When the extension is listed on the stores, add these store-native counters:
+  [![Chrome Web Store](https://img.shields.io/chrome-web-store/users/CWS_EXTENSION_ID?label=chrome%20users)](https://chromewebstore.google.com/detail/CWS_EXTENSION_ID)
+  [![Firefox Add-on](https://img.shields.io/amo/users/AMO_ADDON_SLUG?label=firefox%20users)](https://addons.mozilla.org/firefox/addon/AMO_ADDON_SLUG/)
+  [![AMO downloads](https://img.shields.io/amo/dw/AMO_ADDON_SLUG?label=firefox%20downloads)](https://addons.mozilla.org/firefox/addon/AMO_ADDON_SLUG/)
+-->
+
 A companion to the self-hosted [mahalinkam](../mahalinkam-srv) bookmark server. It
 does two things:
 
