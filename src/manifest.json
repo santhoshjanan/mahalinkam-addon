@@ -18,7 +18,7 @@
     "service_worker": "src/background/index.ts",
     "type": "module"
   },
-  "permissions": ["activeTab", "contextMenus", "storage", "scripting", "notifications"],
+  "permissions": ["activeTab", "tabs", "contextMenus", "storage", "notifications"],
   "optional_host_permissions": ["*://*/*"],
   "icons": {
     "16": "src/assets/icon-16.png",
@@ -36,7 +36,8 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "mahalinkam@localhost"
+      "id": "mahalinkam@localhost",
+      "strict_min_version": "121.0"
     }
   }
 }

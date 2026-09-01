@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { AuthError, NetworkError } from '../../lib/errors';
+import { AuthError, NetworkError, ServerError } from '../../lib/errors';
 
 const props = defineProps<{ error: unknown }>();
 const emit = defineEmits<{ (e: 'retry'): void }>();
 
-const isNetwork = computed(() => props.error instanceof NetworkError);
+// Retryable: a network blip, or a transient 5xx from a self-hoster's proxy.
+// Not retryable: AuthError / ValidationError (retrying changes nothing).
+const canRetry = computed(
+  () => props.error instanceof NetworkError || props.error instanceof ServerError,
+);
 
 const text = computed(() => {
   const err = props.error;
   if (err instanceof NetworkError) return "Can't reach the server.";
+  if (err instanceof ServerError) return `Server error (HTTP ${err.status}).`;
   if (err instanceof AuthError) return 'Token rejected — check the extension options.';
   if (err instanceof Error) return err.message;
   return String(err);
@@ -19,7 +24,7 @@ const text = computed(() => {
 <template>
   <div v-if="error" class="notice" role="alert">
     <span class="msg">{{ text }}</span>
-    <button v-if="isNetwork" type="button" class="retry" @click="emit('retry')">Retry</button>
+    <button v-if="canRetry" type="button" class="retry" @click="emit('retry')">Retry</button>
   </div>
 </template>
 

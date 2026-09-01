@@ -20,13 +20,16 @@ only used for the end-to-end smoke against a real server.
 
 ### `src/lib/` — the logic layer (all unit-tested, framework-free)
 
-- **`urlNormalizer.ts`** — a byte-for-byte port of the server's
-  `App\Services\UrlNormalizer`. `src/lib/__fixtures__/url-normalizer.json` is the
-  shared cross-client contract and must stay identical in meaning to the server's
-  `app/Support/url-normalizer-fixtures.php`. A divergence is **release-blocking**;
-  change both fixtures and re-run both test suites together. The extension only
-  uses this for local echo/consistency — the server is the source of truth and
-  re-normalizes every URL it receives.
+- **`urlNormalizer.ts`** — client-side URL normalization modelled on the
+  server's `App\Services\UrlNormalizer`. It matches the server for every case in
+  the shared fixture (`src/lib/__fixtures__/url-normalizer.json`), but WHATWG
+  `URL` and PHP `parse_url` diverge on inputs outside that table (dot-segments,
+  spaces, IDN hosts) — it is **not** a byte-for-byte port. This is used only for
+  a client-side cache key and is never compared against server data; the server
+  is the source of truth and re-normalizes every URL it receives. The shared
+  fixture is a **release-blocking contract**: it must stay identical in meaning
+  to the server's `app/Support/url-normalizer-fixtures.php`; on any change to it,
+  update both fixtures and re-run both test suites together.
 - **`apiClient.ts`** — the *entire* interface to the server. A thin `fetch`
   wrapper that reads settings fresh on every call, attaches the bearer token, and
   maps non-2xx responses to typed errors from `errors.ts`:

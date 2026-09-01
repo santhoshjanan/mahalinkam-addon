@@ -100,6 +100,20 @@ async function bootstrap(): Promise<void> {
   }
 }
 
+/**
+ * Tell the background worker a bookmark for `url` was created/updated (`saved`)
+ * or deleted, so it can bust its lookup cache and refresh the toolbar icon
+ * instead of waiting out the 60s TTL. Best-effort — never blocks the popup.
+ */
+function notifyBookmarkChanged(url: string, saved: boolean): void {
+  if (!url) return;
+  try {
+    void browser.runtime.sendMessage({ type: 'bookmark-changed', url, saved }).catch(() => {});
+  } catch {
+    /* no receiver / messaging unavailable — the TTL will catch up */
+  }
+}
+
 function submit(): void {
   void run(async () => {
     if (mode.value === 'edit' && existingId.value !== null) {
@@ -119,6 +133,7 @@ function submit(): void {
         tags: form.value.tags,
       });
     }
+    notifyBookmarkChanged(tabUrl.value, true);
     window.close();
   });
 }
@@ -129,12 +144,21 @@ function remove(): void {
   const id = existingId.value;
   void run(async () => {
     await apiClient.deleteBookmark(id);
+    notifyBookmarkChanged(tabUrl.value, false);
     window.close();
   });
 }
 
 onMounted(async () => {
-  const settings = await getSettings();
+  let settings;
+  try {
+    settings = await getSettings();
+  } catch {
+    // storage read failed — fall back to the setup screen rather than
+    // stranding the popup on "Loading…".
+    phase.value = 'setup';
+    return;
+  }
   if (!settings) {
     phase.value = 'setup';
     return;

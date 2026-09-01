@@ -26,7 +26,11 @@ click **Load unpacked**, and pick the `dist/chrome` directory.
 
 **Firefox:** open `about:debugging` → **This Firefox** → **Load Temporary
 Add-on…** and pick `dist/firefox/manifest.json`. (A temporary add-on is removed
-when Firefox restarts; reload it the same way.)
+when Firefox restarts; reload it the same way.) Requires Firefox 121+ (module
+background scripts).
+
+For AMO submission, replace `browser_specific_settings.gecko.id` with your own
+add-on id.
 
 ## First run
 
