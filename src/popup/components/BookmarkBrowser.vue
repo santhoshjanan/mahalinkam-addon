@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import browser from 'webextension-polyfill';
 import { apiClient, type Bookmark, type Folder } from '../../lib/apiClient';
 import { buildTree, type TreeNode } from '../../lib/folderTree';
@@ -128,6 +128,44 @@ function open(url: string): void {
   void browser.tabs.create({ url });
   window.close();
 }
+
+/* ---- reconcile after an edit/delete done in the form, without a refetch ---- */
+
+const flash = ref('');
+let flashTimer: ReturnType<typeof setTimeout> | undefined;
+function showFlash(msg: string): void {
+  flash.value = msg;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => (flash.value = ''), 2200);
+}
+onBeforeUnmount(() => clearTimeout(flashTimer));
+
+function scopeHolds(bm: Bookmark): boolean {
+  const scope = currentScope.value;
+  return (
+    (scope.kind === 'folder' && bm.folder_id === scope.id) ||
+    (scope.kind === 'unfiled' && bm.folder_id === null)
+  );
+}
+
+/** Drop a row the form just deleted. */
+function applyDelete(id: number): void {
+  bookmarks.value = bookmarks.value.filter((b) => b.id !== id);
+  showFlash('Bookmark deleted.');
+}
+
+/** Replace a row the form just edited — or drop it if the edit moved it out. */
+function applyUpdate(bm: Bookmark): void {
+  if (scopeHolds(bm)) {
+    bookmarks.value = bookmarks.value.map((b) => (b.id === bm.id ? bm : b));
+    showFlash('Bookmark updated.');
+  } else {
+    bookmarks.value = bookmarks.value.filter((b) => b.id !== bm.id);
+    showFlash('Bookmark moved.');
+  }
+}
+
+defineExpose({ applyDelete, applyUpdate });
 </script>
 
 <template>
@@ -145,6 +183,10 @@ function open(url: string): void {
     <p v-if="currentScope.kind === 'root'" class="lead">
       Open a folder to see its bookmarks. To search across everything, use the Search tab.
     </p>
+
+    <Transition name="flash">
+      <p v-if="flash" class="flash" role="status">{{ flash }}</p>
+    </Transition>
 
     <ErrorNotice :error="error" @retry="loadBookmarks(true)" />
 
@@ -282,6 +324,33 @@ function open(url: string): void {
   font-size: 0.75rem;
   line-height: 1.4;
   color: #6b7280;
+}
+
+.flash {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.flash-enter-active,
+.flash-leave-active {
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.flash-enter-from,
+.flash-leave-to {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash-enter-active,
+  .flash-leave-active {
+    transition: none;
+  }
 }
 
 .rows {

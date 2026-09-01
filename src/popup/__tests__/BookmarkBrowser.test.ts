@@ -71,6 +71,41 @@ describe('BookmarkBrowser — List tab', () => {
     expect(wrapper.find('.lead').exists()).toBe(false);
   });
 
+  it('applyDelete drops the row and flashes a confirmation', async () => {
+    listBookmarks.mockResolvedValueOnce(page([bookmark(10), bookmark(11)]));
+    const wrapper = mount(BookmarkBrowser, { props: { folders } });
+    await flushPromises();
+    await wrapper.findAll('.row.folder')[0].trigger('click');
+    await flushPromises();
+    expect(wrapper.findAll('.bookmark-row')).toHaveLength(2);
+
+    (wrapper.vm as unknown as { applyDelete: (id: number) => void }).applyDelete(10);
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.findAll('.bookmark-row')).toHaveLength(1);
+    expect(wrapper.find('.flash').text()).toBe('Bookmark deleted.');
+  });
+
+  it('applyUpdate replaces a row in the same folder, drops one moved out', async () => {
+    listBookmarks.mockResolvedValueOnce(page([bookmark(10), bookmark(11)]));
+    const wrapper = mount(BookmarkBrowser, { props: { folders } });
+    await flushPromises();
+    await wrapper.findAll('.row.folder')[0].trigger('click'); // "Reading" (id 1)
+    await flushPromises();
+
+    const vm = wrapper.vm as unknown as { applyUpdate: (b: Bookmark) => void };
+
+    vm.applyUpdate({ ...bookmark(10), title: 'Renamed', folder_id: 1 });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.bookmark-row .title').text()).toBe('Renamed');
+    expect(wrapper.find('.flash').text()).toBe('Bookmark updated.');
+
+    vm.applyUpdate({ ...bookmark(11), folder_id: 3 });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.findAll('.bookmark-row')).toHaveLength(1);
+    expect(wrapper.find('.flash').text()).toBe('Bookmark moved.');
+  });
+
   it('descending into a folder fetches its bookmarks and shows its subfolders', async () => {
     listBookmarks.mockResolvedValueOnce(page([bookmark(10), bookmark(11)]));
     const wrapper = mount(BookmarkBrowser, { props: { folders } });

@@ -277,6 +277,9 @@ frame). Within it:
     (`0 0 0 3px → 5px`) — the single deliberate perpetual loop, kept subliminal
     so it reads as "alive" not "nagging". Off entirely under reduced motion.
   - Primary buttons dip `translateY(1px) scale(~0.985)` on `:active`.
+  - **Flash line:** the List's transient confirmation ("Bookmark deleted /
+    updated / moved") fades in and out over 150ms (`opacity` + 2px `translateY`),
+    auto-clearing after ~2.2s. Instant under reduced motion.
   - Nothing else: no entrance animation, no hover transitions beyond color, no
     other loop.
 
@@ -316,6 +319,11 @@ frame). Within it:
   underline on hover. Covers "← Back to list" (form, only when opened from a List
   row), "Load more" (List paging), and the List-row **Edit** affordance. No
   borders, no fills — the accent text is the affordance.
+- **Work-through-a-folder flow** — editing or deleting a bookmark reached from a
+  List row returns to that folder (popup stays open, row reconciled in place, a
+  Flash line confirms) instead of dismissing, so a run of edits/deletes needs no
+  reopening. Acting on the _current page's_ bookmark from the Save/Edit tab still
+  stamps and closes.
 - **Primary button** — solid `accent`, white text, `4px` radius, `600` weight,
   `flex: 1` in an actions row. `:disabled` → `opacity: 0.6`. On a successful save
   it holds a disabled **`ok`-green "Saved ✓"** state for the ~400ms before the
@@ -353,6 +361,9 @@ frame). Within it:
 - **Orientation line** — a single `0.75rem` `muted` sentence at the List tab's
   root scope only ("Open a folder to see its bookmarks. To search across
   everything, use the Search tab."); gone once you descend.
+- **Flash line** — a `0.75rem/600` `muted` `role="status"` line below the
+  breadcrumb, shown for ~2.2s after an edit/delete done in the form
+  ("Bookmark deleted / updated / moved"), then it fades out.
 - **Empty / hint text** — single `meta`-size `muted` line ("Nothing in this
   folder yet.", "No matches.").
 

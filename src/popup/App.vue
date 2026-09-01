@@ -94,6 +94,8 @@ const folderOptions = ref<FolderOption[]>([]);
 const tagSuggestions = ref<string[]>([]);
 /** Raw folder list, fetched once, shared with the List tab's folder browser. */
 const rawFolders = ref<Folder[]>([]);
+/** The List browser, for reconciling a row after an edit/delete from the form. */
+const browserRef = ref<InstanceType<typeof BookmarkBrowser> | null>(null);
 
 /** Run an async action, tracking it so <ErrorNotice>'s Retry can re-run it. */
 async function run(action: () => Promise<void>): Promise<void> {
@@ -196,10 +198,30 @@ function backToList(): void {
   view.value = 'list';
 }
 
+/**
+ * After a save/delete: when the form was opened from a List row, reconcile that
+ * row in place and return to the folder (popup stays open, so several can be
+ * worked in a row). Otherwise it acted on the current page's bookmark — stamp
+ * (on save) and dismiss.
+ */
+function finishOrReturn(reconcile: (b: typeof browserRef.value) => void, stamp: boolean): void {
+  if (formOrigin.value === 'list') {
+    reconcile(browserRef.value);
+    backToList();
+    return;
+  }
+  if (stamp) {
+    justSaved.value = true;
+    if (!reducedMotion) stamping.value = true;
+  }
+  window.setTimeout(() => window.close(), 400);
+}
+
 function submit(): void {
   void run(async () => {
+    let updated: Bookmark | undefined;
     if (mode.value === 'edit' && existingId.value !== null) {
-      await apiClient.updateBookmark(existingId.value, {
+      updated = await apiClient.updateBookmark(existingId.value, {
         title: form.value.title,
         description: form.value.description,
         folder_id: form.value.folderId,
@@ -217,11 +239,9 @@ function submit(): void {
     }
     notifyBookmarkChanged(tabUrl.value, true);
     liveMessage.value = mode.value === 'edit' ? 'Bookmark updated.' : 'Bookmark saved.';
-    justSaved.value = true;
-    // Stamp the mark (unless reduced motion), then dismiss. The short hold also
-    // shows the "Saved" state and lets the live region announce before close.
-    if (!reducedMotion) stamping.value = true;
-    window.setTimeout(() => window.close(), 400);
+    finishOrReturn((b) => {
+      if (updated) b?.applyUpdate(updated);
+    }, true);
   });
 }
 
@@ -233,7 +253,7 @@ function remove(): void {
     await apiClient.deleteBookmark(id);
     notifyBookmarkChanged(tabUrl.value, false);
     liveMessage.value = 'Bookmark deleted.';
-    window.setTimeout(() => window.close(), 400);
+    finishOrReturn((b) => b?.applyDelete(id), false);
   });
 }
 
@@ -265,7 +285,7 @@ onMounted(async () => {
     <template v-else-if="phase === 'setup'">
       <header class="brandbar">
         <span class="mark" aria-hidden="true"></span>
-        <span class="wordmark">mahalinkam</span>
+        <span class="wordmark">Mahalinkam</span>
         <span
           class="status status--off"
           role="img"
@@ -284,7 +304,7 @@ onMounted(async () => {
     <template v-else>
       <header class="brandbar">
         <span class="mark" :class="{ stamping }" aria-hidden="true"></span>
-        <span class="wordmark">mahalinkam</span>
+        <span class="wordmark">Mahalinkam</span>
         <span
           class="status status--on"
           role="img"
@@ -340,7 +360,7 @@ onMounted(async () => {
       </section>
 
       <section v-show="view === 'list'" id="panel-list" role="tabpanel" aria-labelledby="tab-list">
-        <BookmarkBrowser :folders="rawFolders" @edit="editFromList" />
+        <BookmarkBrowser ref="browserRef" :folders="rawFolders" @edit="editFromList" />
       </section>
 
       <section

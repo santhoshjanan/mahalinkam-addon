@@ -133,6 +133,63 @@ describe('popup App — List tab', () => {
     expect(wrapper.find('.backlink').exists()).toBe(false);
   });
 
+  it('deleting from a List row keeps the popup open and returns to the folder', async () => {
+    api.listBookmarks.mockResolvedValue({
+      data: [
+        bookmark({ id: 77 }),
+        bookmark({ id: 88, url: 'https://saved.test/2', title: 'Second' }),
+      ],
+      meta: { current_page: 1, last_page: 1, total: 2, per_page: 50 },
+    });
+    api.deleteBookmark.mockResolvedValue(undefined);
+    const wrapper = mount(App);
+    await flushPromises();
+
+    await wrapper.findAll('.tabs button')[1].trigger('click');
+    await wrapper.findAll('#panel-list .row.folder')[0].trigger('click');
+    await flushPromises();
+    expect(wrapper.findAll('.bookmark-row')).toHaveLength(2);
+
+    await wrapper.findAll('.bookmark-row .edit')[0].trigger('click');
+    await flushPromises();
+    const del = wrapper.find('.bookmark-form .danger');
+    await del.trigger('click'); // arm
+    await del.trigger('click'); // confirm
+    await flushPromises();
+
+    expect(api.deleteBookmark).toHaveBeenCalledWith(77);
+    expect(window.close).not.toHaveBeenCalled();
+    expect(wrapper.find('#panel-list').isVisible()).toBe(true);
+    expect(wrapper.find('#panel-form').isVisible()).toBe(false);
+    expect(wrapper.findAll('.bookmark-row')).toHaveLength(1);
+    expect(wrapper.find('#panel-list .flash').text()).toBe('Bookmark deleted.');
+  });
+
+  it('saving an edit from a List row updates the row in place and returns to the folder', async () => {
+    api.listBookmarks.mockResolvedValue({
+      data: [bookmark({ id: 77, title: 'Old title' })],
+      meta: { current_page: 1, last_page: 1, total: 1, per_page: 50 },
+    });
+    api.updateBookmark.mockResolvedValue(bookmark({ id: 77, title: 'New title', folder_id: 2 }));
+    const wrapper = mount(App);
+    await flushPromises();
+
+    await wrapper.findAll('.tabs button')[1].trigger('click');
+    await wrapper.findAll('#panel-list .row.folder')[0].trigger('click');
+    await flushPromises();
+
+    await wrapper.find('.bookmark-row .edit').trigger('click');
+    await flushPromises();
+    await wrapper.find('.bookmark-form').trigger('submit');
+    await flushPromises();
+
+    expect(api.updateBookmark).toHaveBeenCalled();
+    expect(window.close).not.toHaveBeenCalled();
+    expect(wrapper.find('#panel-list').isVisible()).toBe(true);
+    expect(wrapper.find('#panel-list .bookmark-row .title').text()).toBe('New title');
+    expect(wrapper.find('#panel-list .flash').text()).toBe('Bookmark updated.');
+  });
+
   it('announces a save through the polite live region and shows a visible Saved state', async () => {
     const wrapper = mount(App);
     await flushPromises();
