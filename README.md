@@ -53,11 +53,13 @@ The server URL and token are the only configuration. They are stored in
   - on an unsaved page → a **Save** form (title/description prefilled, pick a
     folder, add tags);
   - on a saved page → an **Edit** form with a **Delete** button;
-  - switch to **Quick search** to find any bookmark and open it in a new tab.
+  - switch to **List** to browse every bookmark by folder, or **Quick search**
+    to find one by text — both open a result in a new tab.
 - **Context menu:** right-click a page or a link → **Save page to mahalinkam** /
   **Save link to mahalinkam**. A notification confirms the save.
-- **Keyboard:** `Ctrl+Shift+D` (`Cmd+Shift+D` on macOS) opens the popup for the
-  current page.
+- **Keyboard:** `Alt+Shift+D` opens the popup for the current page. Rebind it at
+  `chrome://extensions/shortcuts` (Chrome) or `about:addons` → gear →
+  **Manage Extension Shortcuts** (Firefox).
 
 The extension sends the **raw** page URL to the server; the server normalizes it
 (strips `utm_*` and other tracking params, drops the fragment, etc.). CORS is not

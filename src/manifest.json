@@ -28,8 +28,8 @@
   "commands": {
     "save_current_page": {
       "suggested_key": {
-        "default": "Ctrl+Shift+D",
-        "mac": "Command+Shift+D"
+        "default": "Alt+Shift+D",
+        "mac": "Alt+Shift+D"
       },
       "description": "Save the current page to mahalinkam"
     }

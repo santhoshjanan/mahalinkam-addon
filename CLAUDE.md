@@ -52,13 +52,20 @@ only used for the end-to-end smoke against a real server.
   cache keyed by normalized URL; exposes `.set(url, result)` and
   `.invalidate(url)`. `resolveIcon()` maps a lookup result to the icon path set.
 
-### `src/popup/` — Vue 3, two modes
+### `src/popup/` — Vue 3, three tabs
 
-Mode is decided by `apiClient.lookup` on the active tab:
+`App.vue` has a `Save · List · Search` tab bar. The Save/Edit tab's mode is
+decided by `apiClient.lookup` on the active tab:
 
 - **Save / Edit** (`components/BookmarkForm.vue`) — prefilled title/description,
   folder dropdown (`folderTree`), tag input with autocomplete
-  (`components/TagInput.vue`). On a saved page it becomes Edit + Delete.
+  (`components/TagInput.vue`). On a saved page it becomes Edit + Delete. The
+  List tab's row-level **Edit** re-uses this same form (`App.vue::editFromList`).
+- **List** (`components/BookmarkBrowser.vue`) — a breadcrumb-anchored folder
+  drill-down. Root shows top-level folders + an "Unfiled" entry (no bookmarks);
+  descending fetches `apiClient.listBookmarks({ folderId })` (numeric id, or
+  `'unfiled'`), non-recursive, paged at 50 with a "Load more" row. Folder tree
+  comes from the `folders` prop `App.vue` already fetched once for the picker.
 - **Quick search** (`components/QuickSearch.vue`) — `apiClient.listBookmarks({ q })`,
   opens a result in a new tab.
 - `components/ErrorNotice.vue` — renders a typed `apiClient` error with a Retry

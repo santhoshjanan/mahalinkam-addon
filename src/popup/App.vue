@@ -2,15 +2,16 @@
 import { computed, onMounted, ref } from 'vue';
 import browser from 'webextension-polyfill';
 import { getSettings } from '../lib/storage';
-import { apiClient } from '../lib/apiClient';
+import { apiClient, type Bookmark, type Folder } from '../lib/apiClient';
 import { buildTree, flattenForSelect } from '../lib/folderTree';
 import { useActiveTab } from './useActiveTab';
 import BookmarkForm from './components/BookmarkForm.vue';
+import BookmarkBrowser from './components/BookmarkBrowser.vue';
 import QuickSearch from './components/QuickSearch.vue';
 import ErrorNotice from './components/ErrorNotice.vue';
 
 type Phase = 'loading' | 'setup' | 'ready';
-type View = 'form' | 'search';
+type View = 'form' | 'list' | 'search';
 type Mode = 'save' | 'edit';
 
 interface FolderOption {
@@ -40,6 +41,8 @@ const form = ref({
 
 const folderOptions = ref<FolderOption[]>([]);
 const tagSuggestions = ref<string[]>([]);
+/** Raw folder list, fetched once, shared with the List tab's folder browser. */
+const rawFolders = ref<Folder[]>([]);
 
 /** Run an async action, tracking it so <ErrorNotice>'s Retry can re-run it. */
 async function run(action: () => Promise<void>): Promise<void> {
@@ -68,6 +71,7 @@ async function bootstrap(): Promise<void> {
   tabUrl.value = tab.url;
 
   const [folders, tags] = await Promise.all([apiClient.listFolders(), apiClient.listTags()]);
+  rawFolders.value = folders;
   folderOptions.value = flattenForSelect(buildTree(folders)).map((o) => {
     const depth = (o.label.length - o.label.trimStart().length) / 2;
     const pad = '\u00a0\u00a0'.repeat(depth);
@@ -112,6 +116,26 @@ function notifyBookmarkChanged(url: string, saved: boolean): void {
   } catch {
     /* no receiver / messaging unavailable — the TTL will catch up */
   }
+}
+
+/**
+ * Row-level "Edit" from the List tab: load an arbitrary bookmark into the
+ * existing Save/Edit form (edit mode) and switch to it. `submit`/`remove` then
+ * operate on `existingId` exactly as they do for the active tab.
+ */
+function editFromList(b: Bookmark): void {
+  mode.value = 'edit';
+  existingId.value = b.id;
+  tabUrl.value = b.url;
+  favicon.value = b.favicon_url ?? undefined;
+  form.value = {
+    title: b.title ?? '',
+    description: b.description ?? '',
+    folderId: b.folder_id,
+    tags: b.tags.map((t) => t.name),
+  };
+  error.value = null;
+  view.value = 'form';
 }
 
 function submit(): void {
@@ -185,6 +209,7 @@ onMounted(async () => {
         <button type="button" :class="{ on: view === 'form' }" @click="view = 'form'">
           {{ mode === 'edit' ? 'Edit' : 'Save' }}
         </button>
+        <button type="button" :class="{ on: view === 'list' }" @click="view = 'list'">List</button>
         <button type="button" :class="{ on: view === 'search' }" @click="view = 'search'">
           Search
         </button>
@@ -208,6 +233,10 @@ onMounted(async () => {
           @delete="remove"
         />
         <ErrorNotice :error="error" @retry="retry" />
+      </section>
+
+      <section v-else-if="view === 'list'">
+        <BookmarkBrowser :folders="rawFolders" @edit="editFromList" />
       </section>
 
       <section v-else>
