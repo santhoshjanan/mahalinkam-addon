@@ -39,7 +39,11 @@ describe('withViewTransition', () => {
     const start = vi.fn((cb: () => void) => {
       cb();
       vtDuringCallback = document.documentElement.dataset.vt;
-      return { finished: Promise.resolve(), updateCallbackDone: Promise.resolve() };
+      return {
+        finished: Promise.resolve(),
+        ready: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+      };
     });
     (document as unknown as { startViewTransition: unknown }).startViewTransition = start;
 
@@ -51,5 +55,47 @@ describe('withViewTransition', () => {
     expect(vtDuringCallback).toBe('drill-in');
     expect(document.documentElement.dataset.vt).toBeUndefined(); // cleared on finish
     expect(supportsViewTransitions()).toBe(true);
+  });
+
+  it('swallows a rejected ready/updateCallbackDone (aborted transition)', async () => {
+    mockReducedMotion(false);
+    const rejected = Promise.reject(new DOMException('aborted', 'InvalidStateError'));
+    const start = vi.fn((cb: () => void) => {
+      cb();
+      return {
+        finished: Promise.resolve(),
+        ready: rejected,
+        updateCallbackDone: rejected,
+      };
+    });
+    (document as unknown as { startViewTransition: unknown }).startViewTransition = start;
+    const onUnhandled = vi.fn();
+    process.on('unhandledRejection', onUnhandled);
+
+    await withViewTransition(vi.fn(), 'tab-fwd');
+    await new Promise((r) => setTimeout(r, 0));
+
+    process.off('unhandledRejection', onUnhandled);
+    expect(onUnhandled).not.toHaveBeenCalled();
+  });
+
+  it('runs the second concurrent update inline instead of a nested transition', async () => {
+    mockReducedMotion(false);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const start = vi.fn((cb: () => void) => {
+      cb();
+      return { finished: gate, ready: Promise.resolve(), updateCallbackDone: Promise.resolve() };
+    });
+    (document as unknown as { startViewTransition: unknown }).startViewTransition = start;
+
+    const first = withViewTransition(vi.fn(), 'tab-fwd'); // holds inFlight
+    const secondUpdate = vi.fn();
+    await withViewTransition(secondUpdate, 'tab-back'); // should NOT call start again
+
+    expect(start).toHaveBeenCalledOnce();
+    expect(secondUpdate).toHaveBeenCalledOnce();
+    release();
+    await first;
   });
 });
