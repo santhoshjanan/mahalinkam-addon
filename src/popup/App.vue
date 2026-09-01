@@ -10,6 +10,7 @@ import BookmarkForm from './components/BookmarkForm.vue';
 import BookmarkBrowser from './components/BookmarkBrowser.vue';
 import QuickSearch from './components/QuickSearch.vue';
 import ErrorNotice from './components/ErrorNotice.vue';
+import SettingsPanel from './components/SettingsPanel.vue';
 
 type Phase = 'loading' | 'setup' | 'ready';
 type View = 'form' | 'list' | 'search';
@@ -25,6 +26,8 @@ interface FolderOption {
 const phase = ref<Phase>('loading');
 const view = ref<View>('form');
 const mode = ref<Mode>('save');
+/** Settings replaces the tab bar + views while open; the identity band stays. */
+const showSettings = ref(false);
 /** Whether the form was opened from its tab or from a List-row "Edit". */
 const formOrigin = ref<'tab' | 'list'>('tab');
 
@@ -119,17 +122,35 @@ function openSettings(): void {
   void browser.runtime.openOptionsPage();
 }
 
+/** Rebuild the indented `<select>` options from the raw folder list. */
+function rebuildFolderOptions(folders: Folder[]): void {
+  folderOptions.value = flattenForSelect(buildTree(folders)).map((o) => {
+    const depth = (o.label.length - o.label.trimStart().length) / 2;
+    const pad = '\u00a0\u00a0'.repeat(depth);
+    return { value: o.id, label: `${pad}${o.label.trimStart()}` };
+  });
+}
+
+/** A folder was just created inline from the bookmark form - fold it into the
+ *  shared lists and select it. */
+function onFolderCreated(folder: Folder): void {
+  rawFolders.value = [...rawFolders.value, folder];
+  rebuildFolderOptions(rawFolders.value);
+  form.value.folderId = folder.id;
+}
+
+function onDisconnected(): void {
+  showSettings.value = false;
+  phase.value = 'setup';
+}
+
 async function bootstrap(): Promise<void> {
   const tab = await useActiveTab();
   tabUrl.value = tab.url;
 
   const [folders, tags] = await Promise.all([apiClient.listFolders(), apiClient.listTags()]);
   rawFolders.value = folders;
-  folderOptions.value = flattenForSelect(buildTree(folders)).map((o) => {
-    const depth = (o.label.length - o.label.trimStart().length) / 2;
-    const pad = '\u00a0\u00a0'.repeat(depth);
-    return { value: o.id, label: `${pad}${o.label.trimStart()}` };
-  });
+  rebuildFolderOptions(folders);
   tagSuggestions.value = tags.map((t) => t.name);
 
   if (!savable.value) {
@@ -311,71 +332,111 @@ onMounted(async () => {
           aria-label="Server connected"
           title="Connected"
         ></span>
+        <button
+          type="button"
+          class="gearbtn"
+          :class="{ on: showSettings }"
+          :aria-pressed="showSettings"
+          :aria-label="showSettings ? 'Close settings' : 'Settings'"
+          @click="showSettings = !showSettings"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+            />
+          </svg>
+        </button>
       </header>
 
-      <nav class="tabs" role="tablist" aria-label="Views">
-        <button
-          v-for="(v, i) in VIEWS"
-          :id="`tab-${v}`"
-          :key="v"
-          :ref="(el) => setTabEl(el, i)"
-          type="button"
-          role="tab"
-          :aria-controls="`panel-${v}`"
-          :aria-selected="view === v"
-          :tabindex="view === v ? 0 : -1"
-          :class="{ on: view === v }"
-          @click="selectView(v)"
-          @keydown="onTabKeydown"
+      <SettingsPanel
+        v-if="showSettings"
+        @close="showSettings = false"
+        @disconnected="onDisconnected"
+      />
+
+      <template v-else>
+        <nav class="tabs" role="tablist" aria-label="Views">
+          <button
+            v-for="(v, i) in VIEWS"
+            :id="`tab-${v}`"
+            :key="v"
+            :ref="(el) => setTabEl(el, i)"
+            type="button"
+            role="tab"
+            :aria-controls="`panel-${v}`"
+            :aria-selected="view === v"
+            :tabindex="view === v ? 0 : -1"
+            :class="{ on: view === v }"
+            @click="selectView(v)"
+            @keydown="onTabKeydown"
+          >
+            {{
+              v === 'form' ? (mode === 'edit' ? 'Edit' : 'Save') : v === 'list' ? 'List' : 'Search'
+            }}
+          </button>
+        </nav>
+
+        <section
+          v-show="view === 'form'"
+          id="panel-form"
+          role="tabpanel"
+          aria-labelledby="tab-form"
         >
-          {{
-            v === 'form' ? (mode === 'edit' ? 'Edit' : 'Save') : v === 'list' ? 'List' : 'Search'
-          }}
-        </button>
-      </nav>
+          <button v-if="formOrigin === 'list'" type="button" class="backlink" @click="backToList">
+            ← Back to list
+          </button>
+          <p v-if="!savable" class="muted">This page can't be saved.</p>
+          <BookmarkForm
+            v-else
+            v-model:title="form.title"
+            v-model:description="form.description"
+            v-model:folder-id="form.folderId"
+            v-model:tags="form.tags"
+            :mode="mode"
+            :url="tabUrl"
+            :favicon="favicon"
+            :folder-options="folderOptions"
+            :tag-suggestions="tagSuggestions"
+            :busy="busy"
+            :saved="justSaved"
+            :field-errors="fieldErrors"
+            @submit="submit"
+            @delete="remove"
+            @folder-created="onFolderCreated"
+          />
+          <ErrorNotice :error="error" @retry="retry" @settings="showSettings = true" />
+        </section>
 
-      <section v-show="view === 'form'" id="panel-form" role="tabpanel" aria-labelledby="tab-form">
-        <button v-if="formOrigin === 'list'" type="button" class="backlink" @click="backToList">
-          ← Back to list
-        </button>
-        <p v-if="!savable" class="muted">This page can't be saved.</p>
-        <BookmarkForm
-          v-else
-          v-model:title="form.title"
-          v-model:description="form.description"
-          v-model:folder-id="form.folderId"
-          v-model:tags="form.tags"
-          :mode="mode"
-          :url="tabUrl"
-          :favicon="favicon"
-          :folder-options="folderOptions"
-          :tag-suggestions="tagSuggestions"
-          :busy="busy"
-          :saved="justSaved"
-          :field-errors="fieldErrors"
-          @submit="submit"
-          @delete="remove"
-        />
-        <ErrorNotice :error="error" @retry="retry" @settings="openSettings" />
-      </section>
+        <section
+          v-show="view === 'list'"
+          id="panel-list"
+          role="tabpanel"
+          aria-labelledby="tab-list"
+        >
+          <BookmarkBrowser
+            ref="browserRef"
+            :folders="rawFolders"
+            :active="view === 'list'"
+            @edit="editFromList"
+          />
+        </section>
 
-      <section v-show="view === 'list'" id="panel-list" role="tabpanel" aria-labelledby="tab-list">
-        <BookmarkBrowser
-          ref="browserRef"
-          :folders="rawFolders"
-          :active="view === 'list'"
-          @edit="editFromList"
-        />
-      </section>
-
-      <section
-        v-show="view === 'search'"
-        id="panel-search"
-        role="tabpanel"
-        aria-labelledby="tab-search"
-      >
-        <QuickSearch />
-      </section>
+        <section
+          v-show="view === 'search'"
+          id="panel-search"
+          role="tabpanel"
+          aria-labelledby="tab-search"
+        >
+          <QuickSearch />
+        </section>
+      </template>
     </template>
 
     <p class="sr-only" role="status" aria-live="polite">{{ liveMessage }}</p>
@@ -463,6 +524,36 @@ onMounted(async () => {
 
 .status--off {
   background: #9ca3af;
+}
+
+.gearbtn {
+  flex: none;
+  display: inline-flex;
+  padding: 0.1rem;
+  margin-left: 0.15rem;
+  color: #9ca3af;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.gearbtn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.gearbtn:hover {
+  color: #111827;
+}
+
+.gearbtn.on {
+  color: #1d4ed8;
+}
+
+.gearbtn:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 1px;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -604,6 +695,14 @@ h1 {
 
   .wordmark {
     color: #f3f4f6;
+  }
+
+  .gearbtn:hover {
+    color: #f3f4f6;
+  }
+
+  .gearbtn.on {
+    color: #60a5fa;
   }
 
   .backlink {

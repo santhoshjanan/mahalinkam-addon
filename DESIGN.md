@@ -12,6 +12,8 @@ colors:
   accent-chip-fg-dark: '#dbe4fb'
   ink: '#111827'
   ok: '#16a34a'
+  ok-text: '#166534'
+  ok-text-dark: '#4ade80'
   status-off: '#9ca3af'
   trough: '#f3f4f6'
   trough-dark: '#0f0f0f'
@@ -175,6 +177,9 @@ descriptions — one grey, not `#666` and `#6b7280` side by side), `hairline`
 
 `ok` `#16a34a` is the "connected" status dot in the identity band (grey `#9ca3af`
 when unconfigured). Like `danger`, it is a status signal, never decoration.
+`ok-text` `#166534` (dark `#4ade80`) is the same signal as readable text — the
+settings panel's "Connected as…" line, the options page's success message —
+because `ok` itself falls short of 4.5:1 on white.
 
 `danger` `#b91c1c` is reserved for destructive and error states only — the Delete
 button, the error notice (`danger-bg` fill, `danger-border` stroke), rejected-token
@@ -248,6 +253,13 @@ Forms: stacked `label > span + control` blocks, `0.6rem` gap, full-width control
 with `box-sizing: border-box`. Actions row is primary button (`flex: 1`) beside an
 optional outline Delete.
 
+**Settings is a mode, not a tab.** A gear button sits at the right end of the
+identity band (after the status dot); pressing it replaces the tab bar + views
+with the `SettingsPanel` (the identity band stays). It carries `aria-pressed`
+and toggles `accent` while open. The standalone options page is first-run setup
+only — same visual language (mono wordmark + offset mark, `accent`), no gear, no
+disconnect.
+
 The preview harness frames the popup in a `rounded.frame` 12px card with a soft
 drop shadow to stand in for the browser toolbar; that frame is harness-only, not
 part of the extension.
@@ -320,8 +332,27 @@ frame). Within it:
 - **Tertiary text buttons** — one language for every low-emphasis action:
   borderless, monospace `0.72rem/700` `0.04em`-tracked, `accent` colored,
   underline on hover. Covers "← Back to list" (form, only when opened from a List
-  row), "Load more" (List paging), and the List-row **Edit** affordance. No
-  borders, no fills — the accent text is the affordance.
+  row), "Load more" (List paging), the List-row **Edit** affordance, and the
+  Settings panel's "Done" / "Edit" / "Replace token" / "Cancel". No borders, no
+  fills — the accent text is the affordance.
+- **Gear button** — a 15px `settings` line icon (`currentColor`), `status-off`
+  grey → `ink` on hover, `accent` while the panel is open. `aria-pressed`,
+  4px `:focus-visible` outline. Only in the connected identity band.
+- **Settings panel** — a scrollable column at 340px, `BookmarkForm` field
+  rhythm. `mono` `SETTINGS` head + a "Done" tertiary. A `status` line
+  (`Checking…` / `ok-text` "Connected as…" / `danger` on failure). Endpoint and
+  token shown read-only in `mono` (`.value`), each revealing an input via a
+  tertiary button; the token display is `redactToken()`'d (bullets + last 4).
+  "Save & verify" primary appears only while an edit is open. A `hairline`
+  divider, then a two-stage `danger` **Disconnect** (arms → "Confirm?") with a
+  `muted` note that it only clears local credentials.
+- **Inline "new folder"** — the folder `<select>` ends with a `＋ New folder…`
+  option; choosing it swaps the select for one bordered row: a borderless text
+  input + a `✓` (`ok`) and `✕` (`danger`) button flush in the trailing edge,
+  each `2rem` wide with a `hairline` left divider. `✓` disabled until non-empty.
+  Below it, a `0.72rem` `muted` context line ("New folder under \"Reading\"" /
+  "…at the top level"). Errors (422 / depth) render in the field's
+  `field-error`; the editor stays open.
 - **Work-through-a-folder flow** — editing or deleting a bookmark reached from a
   List row returns to that folder (popup stays open, row reconciled in place, a
   Flash line confirms) instead of dismissing, so a run of edits/deletes needs no

@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
+import { apiClient, type Folder } from '../../lib/apiClient';
+import { ValidationError } from '../../lib/errors';
 import TagInput from './TagInput.vue';
 
 interface FolderOption {
@@ -38,6 +40,7 @@ const emit = defineEmits<{
   (e: 'update:tags', v: string[]): void;
   (e: 'submit'): void;
   (e: 'delete'): void;
+  (e: 'folder-created', folder: Folder): void;
 }>();
 
 const submitLabel = computed(() => {
@@ -45,9 +48,67 @@ const submitLabel = computed(() => {
   return props.mode === 'edit' ? 'Save changes' : 'Save';
 });
 
+/* --- folder picker + inline "new folder" --------------------------------- */
+
+const NEW_FOLDER = '__new__';
+
+const creating = ref(false);
+const newName = ref('');
+const creatingBusy = ref(false);
+const createError = ref('');
+const newFolderInput = ref<HTMLInputElement | null>(null);
+
+/** Human phrase for where the new folder will sit — the currently picked
+ *  folder is its parent. */
+const parentLabel = computed(() => {
+  if (props.folderId === null) return 'at the top level';
+  const opt = props.folderOptions.find((o) => o.value === props.folderId);
+  return opt ? `under "${opt.label.trim()}"` : 'at the top level';
+});
+
 function onFolderChange(e: Event): void {
   const raw = (e.target as HTMLSelectElement).value;
+  if (raw === NEW_FOLDER) {
+    void startCreate();
+    return;
+  }
   emit('update:folderId', raw === '' ? null : Number(raw));
+}
+
+async function startCreate(): Promise<void> {
+  creating.value = true;
+  newName.value = '';
+  createError.value = '';
+  await nextTick();
+  newFolderInput.value?.focus();
+}
+
+function cancelCreate(): void {
+  creating.value = false;
+  newName.value = '';
+  createError.value = '';
+}
+
+async function confirmCreate(): Promise<void> {
+  const name = newName.value.trim();
+  if (!name || creatingBusy.value) return;
+  creatingBusy.value = true;
+  createError.value = '';
+  try {
+    const folder = await apiClient.createFolder({ name, parent_id: props.folderId });
+    emit('folder-created', folder); // parent selects it + refreshes the option list
+    creating.value = false;
+    newName.value = '';
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      createError.value =
+        err.fields.parent_id?.[0] ?? err.fields.name?.[0] ?? 'That folder name was rejected.';
+    } else {
+      createError.value = err instanceof Error ? err.message : 'Could not create the folder.';
+    }
+  } finally {
+    creatingBusy.value = false;
+  }
 }
 
 /**
@@ -111,16 +172,61 @@ function disarm(): void {
       </span>
     </label>
 
-    <label class="field" :class="{ 'field--bad': fieldError('folder_id') }">
+    <div class="field" :class="{ 'field--bad': fieldError('folder_id') || createError }">
       <span>Folder</span>
-      <select :value="folderId === null ? '' : String(folderId)" @change="onFolderChange">
+
+      <select
+        v-if="!creating"
+        :value="folderId === null ? '' : String(folderId)"
+        @change="onFolderChange"
+      >
         <option value="">(Unfiled)</option>
         <option v-for="opt in folderOptions" :key="String(opt.value)" :value="String(opt.value)">
           {{ opt.label }}
         </option>
+        <option :value="NEW_FOLDER">＋ New folder…</option>
       </select>
-      <span v-if="fieldError('folder_id')" class="field-error">{{ fieldError('folder_id') }}</span>
-    </label>
+
+      <template v-else>
+        <div class="folder-new">
+          <input
+            ref="newFolderInput"
+            v-model="newName"
+            type="text"
+            class="folder-new-input"
+            placeholder="Folder name"
+            autocomplete="off"
+            :disabled="creatingBusy"
+            @keydown.enter.prevent="confirmCreate"
+            @keydown.esc.prevent="cancelCreate"
+          />
+          <button
+            type="button"
+            class="fn-btn fn-ok"
+            :disabled="!newName.trim() || creatingBusy"
+            aria-label="Create folder"
+            @click="confirmCreate"
+          >
+            ✓
+          </button>
+          <button
+            type="button"
+            class="fn-btn fn-cancel"
+            :disabled="creatingBusy"
+            aria-label="Cancel new folder"
+            @click="cancelCreate"
+          >
+            ✕
+          </button>
+        </div>
+        <span class="folder-new-context">New folder {{ parentLabel }}</span>
+      </template>
+
+      <span v-if="createError" class="field-error">{{ createError }}</span>
+      <span v-else-if="fieldError('folder_id')" class="field-error">
+        {{ fieldError('folder_id') }}
+      </span>
+    </div>
 
     <div class="field" :class="{ 'field--bad': fieldError('tags') }">
       <span>Tags</span>
@@ -209,8 +315,65 @@ function disarm(): void {
 
 .field--bad input,
 .field--bad textarea,
-.field--bad select {
+.field--bad select,
+.field--bad .folder-new {
   border-color: #b91c1c;
+}
+
+/* inline "new folder" editor: one bordered row, input + ✓/✕ */
+.folder-new {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.field .folder-new-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.field .folder-new-input:focus {
+  outline: none;
+}
+
+.fn-btn {
+  flex: none;
+  width: 2rem;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  border-left: 1px solid #e5e7eb;
+  cursor: pointer;
+}
+
+.fn-ok {
+  color: #16a34a;
+}
+
+.fn-cancel {
+  color: #b91c1c;
+}
+
+.fn-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.folder-new-context {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  color: #6b7280;
 }
 
 .form-error {
@@ -289,7 +452,8 @@ function disarm(): void {
 @media (prefers-color-scheme: dark) {
   .field input,
   .field textarea,
-  .field select {
+  .field select,
+  .folder-new {
     background: #1e1e1e;
     border-color: #555;
     color: #e8e8e8;
@@ -297,8 +461,21 @@ function disarm(): void {
 
   .field--bad input,
   .field--bad textarea,
-  .field--bad select {
+  .field--bad select,
+  .field--bad .folder-new {
     border-color: #fca5a5;
+  }
+
+  .fn-btn {
+    border-left-color: #2a2a2a;
+  }
+
+  .fn-ok {
+    color: #4ade80;
+  }
+
+  .fn-cancel {
+    color: #fca5a5;
   }
 
   .form-error,

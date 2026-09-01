@@ -4,6 +4,7 @@ import { browserMock } from '../../test/mockBrowser';
 import type { Bookmark } from '../../lib/apiClient';
 
 const api = vi.hoisted(() => ({
+  ping: vi.fn(),
   lookup: vi.fn(),
   listFolders: vi.fn(),
   listTags: vi.fn(),
@@ -11,6 +12,7 @@ const api = vi.hoisted(() => ({
   updateBookmark: vi.fn(),
   deleteBookmark: vi.fn(),
   createBookmark: vi.fn(),
+  createFolder: vi.fn(),
 }));
 vi.mock('../../lib/apiClient', () => ({ apiClient: api }));
 
@@ -42,6 +44,11 @@ beforeEach(async () => {
   api.lookup.mockResolvedValue({ found: false });
   api.listFolders.mockResolvedValue([{ id: 2, parent_id: null, name: 'Refs', position: 1 }]);
   api.listTags.mockResolvedValue([]);
+  api.ping.mockResolvedValue({
+    ok: true,
+    user: { id: 1, name: 'San', email: 's@x.test' },
+    server: { version: '0.1.2' },
+  });
   // Safe default for the List tab's lazy fetch; individual tests override.
   api.listBookmarks.mockResolvedValue({
     data: [],
@@ -243,5 +250,54 @@ describe('popup App — List tab', () => {
     const dot = wrapper.find('.status');
     expect(dot.attributes('role')).toBe('img');
     expect(dot.attributes('aria-label')).toBe('Server connected');
+  });
+
+  it('the gear toggles the settings panel over the tab bar', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    expect(wrapper.find('.settings').exists()).toBe(false);
+    expect(wrapper.find('.tabs').exists()).toBe(true);
+
+    await wrapper.find('.gearbtn').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('.settings').exists()).toBe(true);
+    expect(wrapper.find('.tabs').exists()).toBe(false);
+    expect(wrapper.find('.settings .status--ok').text()).toContain('Connected as San');
+
+    await wrapper.find('.settings .head .linkbtn').trigger('click'); // Done
+    expect(wrapper.find('.settings').exists()).toBe(false);
+    expect(wrapper.find('.tabs').exists()).toBe(true);
+  });
+
+  it('disconnecting from settings drops the popup to the setup screen', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.find('.gearbtn').trigger('click');
+    await flushPromises();
+
+    const disc = wrapper.find('.settings .danger');
+    await disc.trigger('click'); // arm
+    await disc.trigger('click'); // confirm
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Connect your server');
+    expect(wrapper.find('.settings').exists()).toBe(false);
+  });
+
+  it('a folder created inline is added to the picker and selected', async () => {
+    api.createFolder.mockResolvedValue({ id: 42, parent_id: null, name: 'Fresh', position: 9 });
+    const wrapper = mount(App);
+    await flushPromises();
+
+    await wrapper.find('.bookmark-form select').setValue('__new__');
+    await wrapper.find('.folder-new-input').setValue('Fresh');
+    await wrapper.find('.fn-ok').trigger('click');
+    await flushPromises();
+
+    const opts = wrapper.findAll('.bookmark-form select option').map((o) => o.text().trim());
+    expect(opts).toContain('Fresh');
+    expect(wrapper.find<HTMLSelectElement>('.bookmark-form select').element.value).toBe('42');
   });
 });

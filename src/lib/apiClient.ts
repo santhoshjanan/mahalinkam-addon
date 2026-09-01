@@ -187,6 +187,17 @@ export const apiClient = {
     return (await req('/api/folders')).body as Folder[];
   },
 
+  /** Create a folder. `parent_id` omitted / null → a top-level folder. The
+   *  server enforces the depth limit and returns a 422 on `parent_id` if the
+   *  parent is already at the maximum nesting. Response is the bare folder. */
+  async createFolder(body: { name: string; parent_id?: number | null }): Promise<Folder> {
+    const { body: b } = await req('/api/folders', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    return b as Folder;
+  },
+
   async listTags(q?: string): Promise<Tag[]> {
     return (await req(`/api/tags${qs({ q })}`)).body as Tag[];
   },

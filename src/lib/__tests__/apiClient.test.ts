@@ -152,3 +152,23 @@ it('maps 500 to ServerError carrying the status', async () => {
   const err = await apiClient.listTags().catch((e: unknown) => e);
   expect(err).toMatchObject({ name: 'ServerError', status: 500, message: 'boom' });
 });
+
+it('createFolder POSTs name + parent_id and returns the bare folder', async () => {
+  const fn = mockFetch(201, { id: 9, parent_id: 2, name: 'Recipes', position: 3 });
+  const folder = await apiClient.createFolder({ name: 'Recipes', parent_id: 2 });
+
+  const [url, init] = fn.mock.calls[0];
+  expect(url).toBe('https://mhl.test/api/folders');
+  expect(init.method).toBe('POST');
+  expect(JSON.parse(init.body as string)).toEqual({ name: 'Recipes', parent_id: 2 });
+  expect(folder).toEqual({ id: 9, parent_id: 2, name: 'Recipes', position: 3 });
+});
+
+it('createFolder maps a 422 to ValidationError with fields', async () => {
+  mockFetch(422, { message: 'Invalid', errors: { parent_id: ['Folder nesting limit reached.'] } });
+  const err = await apiClient.createFolder({ name: 'Deep', parent_id: 5 }).catch((e: unknown) => e);
+  expect(err).toMatchObject({ name: 'ValidationError' });
+  expect((err as { fields: Record<string, string[]> }).fields.parent_id[0]).toBe(
+    'Folder nesting limit reached.',
+  );
+});

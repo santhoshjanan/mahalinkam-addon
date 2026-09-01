@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue';
 import { getSettings, saveSettings } from '../lib/storage';
 import { requestOriginPermission } from '../lib/permissions';
 import { apiClient } from '../lib/apiClient';
-import { AuthError, NetworkError, NotConfiguredError, ServerError } from '../lib/errors';
+import { pingErrorMessage } from '../lib/pingError';
 
 type Status = 'idle' | 'testing' | 'ok' | 'error';
 
@@ -19,15 +19,6 @@ onMounted(async () => {
     token.value = existing.token;
   }
 });
-
-function pingErrorMessage(err: unknown): string {
-  if (err instanceof NotConfiguredError) return 'Fill in both fields.';
-  if (err instanceof AuthError) return 'The server rejected this token.';
-  if (err instanceof NetworkError)
-    return "Couldn't reach the server (is the URL right? is it running?).";
-  if (err instanceof ServerError) return `Server error (HTTP ${err.status}).`;
-  return err instanceof Error ? err.message : String(err);
-}
 
 async function saveAndVerify(): Promise<void> {
   const url = serverUrl.value.trim();
@@ -88,7 +79,11 @@ async function saveAndVerify(): Promise<void> {
 
 <template>
   <main class="options">
-    <h1>Mahalinkam</h1>
+    <header class="brandbar">
+      <span class="mark" aria-hidden="true"></span>
+      <span class="wordmark">Mahalinkam</span>
+    </header>
+    <h1>Connect your server</h1>
 
     <label class="field">
       <span>Server URL</span>
@@ -122,16 +117,44 @@ async function saveAndVerify(): Promise<void> {
 
 <style scoped>
 .options {
-  max-width: 32rem;
-  margin: 2rem auto;
+  max-width: 30rem;
+  margin: 2.5rem auto;
   padding: 0 1rem;
   font-family: system-ui, sans-serif;
   color: #1a1a1a;
 }
 
-h1 {
-  font-size: 1.25rem;
+.brandbar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   margin-bottom: 1.5rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.mark {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  background: #1d4ed8;
+  border-radius: 2px;
+  box-shadow: 3px 3px 0 0 #93c5fd;
+}
+
+.wordmark {
+  font-family:
+    ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  color: #111827;
+}
+
+h1 {
+  font-size: 1.05rem;
+  margin: 0 0 1.25rem;
 }
 
 .field {
@@ -141,7 +164,7 @@ h1 {
 
 .field span {
   display: block;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 600;
   margin-bottom: 0.25rem;
 }
@@ -149,30 +172,31 @@ h1 {
 .field input {
   width: 100%;
   box-sizing: border-box;
-  padding: 0.5rem;
-  font-size: 0.95rem;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.9rem;
+  font-family: inherit;
   border: 1px solid #bbb;
   border-radius: 4px;
 }
 
 .hint {
   font-size: 0.8rem;
-  color: #555;
+  color: #6b7280;
   margin: 0 0 1.25rem;
 }
 
 .hint code {
-  background: #f0f0f0;
+  background: #f3f4f6;
   padding: 0.05rem 0.25rem;
   border-radius: 3px;
 }
 
 .primary {
   padding: 0.5rem 1rem;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: #fff;
-  background: #2563eb;
+  background: #1d4ed8;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -185,7 +209,7 @@ h1 {
 
 .message {
   margin-top: 1rem;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .message.ok {
@@ -197,12 +221,25 @@ h1 {
 }
 
 .message.testing {
-  color: #555;
+  color: #6b7280;
 }
 
 @media (prefers-color-scheme: dark) {
   .options {
     color: #e8e8e8;
+  }
+
+  .brandbar {
+    border-bottom-color: #2a2a2a;
+  }
+
+  .mark {
+    background: #60a5fa;
+    box-shadow: 3px 3px 0 0 #1e3a8a;
+  }
+
+  .wordmark {
+    color: #f3f4f6;
   }
 
   .field input {
@@ -212,7 +249,7 @@ h1 {
   }
 
   .hint {
-    color: #aaa;
+    color: #9ca3af;
   }
 
   .hint code {
@@ -224,7 +261,11 @@ h1 {
   }
 
   .message.error {
-    color: #f87171;
+    color: #fca5a5;
+  }
+
+  .message.testing {
+    color: #9ca3af;
   }
 }
 </style>
