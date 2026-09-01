@@ -10,10 +10,13 @@
 // The shared fixture is still a release-blocking contract: it must stay
 // identical in meaning to the server's app/Support/url-normalizer-fixtures.php,
 // and a divergence there blocks release.
+//
+// MAX_LENGTH = 766 (MySQL utf8mb4 unique-index fit: 766×4 bytes + 8-byte
+// bigint user_id = 3072, MySQL's InnoDB index limit).
 
 export class InvalidUrlError extends Error {}
 
-export const MAX_LENGTH = 768;
+export const MAX_LENGTH = 766;
 
 export const TRACKING_PARAMS: string[] = [
   'utm_source',
