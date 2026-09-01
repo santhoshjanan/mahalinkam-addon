@@ -311,18 +311,23 @@ frame). Within it:
   `role="tab"` / `aria-selected` / `aria-controls`, roving `tabindex`,
   arrow-key + Home/End selection with focus follow, and `role="tabpanel"`
   sections labelled by their tab.
-- **Back-link** — a borderless `mono-tab`-weight `accent` text button ("← Back to
-  list") shown in the form only when it was opened from a List row; underlines on
-  hover. The lone in-flow navigation affordance; everything else is the tab bar
-  or the breadcrumb.
-- **Primary button** — solid `accent`, white text, `4px` radius, `600` weight.
-  `flex: 1` in an actions row. `:disabled` drops to `opacity: 0.6`.
-- **Danger button** — transparent fill, `danger` text + 1px `danger` border,
-  same radius/size. Only for Delete.
+- **Tertiary text buttons** — one language for every low-emphasis action:
+  borderless, monospace `0.72rem/700` `0.04em`-tracked, `accent` colored,
+  underline on hover. Covers "← Back to list" (form, only when opened from a List
+  row), "Load more" (List paging), and the List-row **Edit** affordance. No
+  borders, no fills — the accent text is the affordance.
+- **Primary button** — solid `accent`, white text, `4px` radius, `600` weight,
+  `flex: 1` in an actions row. `:disabled` → `opacity: 0.6`. On a successful save
+  it holds a disabled **`ok`-green "Saved ✓"** state for the ~400ms before the
+  popup closes (sighted parity with the live-region announcement).
+- **Danger button** — transparent fill, `danger` text + 1px `danger` border.
+  Two-stage: first press arms it (fills `danger`, label → "Confirm?",
+  `aria-label` updates); a second press within ~3.5s commits; blur or timeout
+  disarms. Only for Delete — replaces a native `confirm`.
 - **Row** (bookmark / folder) — full-width flex button, transparent, `4px`
   radius, `row-hover` on hover, `inherit` color. Leading 16px favicon or line
-  icon; ellipsized title; `meta` host line; optional trailing chevron or a small
-  outline **Edit** chip (0.75rem/600, `border-soft`, `muted` → `accent` on hover).
+  icon; ellipsized title; `meta` host line; optional trailing chevron, or the
+  tertiary **Edit** button on bookmark rows.
 - **Breadcrumb** — wrapping flex row of `accent` text-button crumbs separated by a
   `muted` `›`; the current (last) crumb is non-interactive bold `text`.
 - **Text input / textarea / select** — full-width, 1px `border-input`, `4px`
@@ -337,10 +342,17 @@ frame). Within it:
   `row-hover-dark` (dark).
 - **Error notice** — `role="alert"`, `danger-bg` fill, 1px `danger-border`,
   `danger` text at `meta`+ size. Inline action button: "Retry" for
-  Network/Server errors, "Settings" for a rejected token (`AuthError`), none for
-  validation.
+  Network/Server errors, "Settings" for a rejected token (`AuthError`). A **422
+  is not shown here** — the form renders it inline instead.
+- **Field errors (422)** — the form maps `ValidationError.fields` to per-field
+  `danger` `0.75rem` messages under each input, turns the input border `danger`
+  (`.field--bad`), and shows a single `danger` `0.8rem/600` "Please fix the
+  highlighted fields." summary at the top. Dark: all switch to `danger-fg-dark`.
 - **Skeleton row** — 2rem tall `hairline` (light) / `skeleton-dark` (dark) block,
   `4px` radius, gentle opacity pulse; 3 shown during first load of a folder.
+- **Orientation line** — a single `0.75rem` `muted` sentence at the List tab's
+  root scope only ("Open a folder to see its bookmarks. To search across
+  everything, use the Search tab."); gone once you descend.
 - **Empty / hint text** — single `meta`-size `muted` line ("Nothing in this
   folder yet.", "No matches.").
 
@@ -349,8 +361,9 @@ frame). Within it:
 - **Do** keep one accent color (`#1d4ed8`). New affordances use `accent`; the
   only other saturated colors are the `ok` / `danger` status signals.
 - **Do** use the monospace family for structural chrome (wordmark, tab labels,
-  hosts, breadcrumb, "Load more") and the sans family for content (titles,
-  descriptions, body copy). Don't blur the two.
+  hosts, breadcrumb, and every tertiary text button — "Load more", "← Back to
+  list", row "Edit") and the sans family for content (titles, descriptions, body
+  copy, field labels, error messages). Don't blur the two.
 - **Do** match native form controls — real `<select>`, real `<input type=search>`,
   full keyboard operability, visible focus, labelled icon-only buttons.
 - **Do** hold the type ramp. Reach for an existing step before inventing a size.

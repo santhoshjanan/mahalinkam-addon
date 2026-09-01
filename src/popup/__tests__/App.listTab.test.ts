@@ -133,7 +133,7 @@ describe('popup App — List tab', () => {
     expect(wrapper.find('.backlink').exists()).toBe(false);
   });
 
-  it('announces a save through the polite live region', async () => {
+  it('announces a save through the polite live region and shows a visible Saved state', async () => {
     const wrapper = mount(App);
     await flushPromises();
 
@@ -142,6 +142,28 @@ describe('popup App — List tab', () => {
 
     expect(api.createBookmark).toHaveBeenCalled();
     expect(wrapper.find('[role="status"]').text()).toBe('Bookmark saved.');
+    const primary = wrapper.find('.bookmark-form .primary');
+    expect(primary.text()).toBe('Saved ✓');
+    expect(primary.classes()).toContain('saved');
+  });
+
+  it('renders a 422 as inline field errors, not a generic notice', async () => {
+    const { ValidationError } = await import('../../lib/errors');
+    api.createBookmark.mockRejectedValueOnce(
+      new ValidationError('Invalid', { title: ['The title field is required.'] }),
+    );
+    const wrapper = mount(App);
+    await flushPromises();
+
+    await wrapper.find('.bookmark-form').trigger('submit');
+    await flushPromises();
+
+    expect(wrapper.find('.bookmark-form .field-error').text()).toBe('The title field is required.');
+    expect(wrapper.find('.bookmark-form .form-error').exists()).toBe(true);
+    // the generic ErrorNotice is suppressed for validation errors
+    expect(wrapper.find('.notice').exists()).toBe(false);
+    // still on the Save button, not "Saved"
+    expect(wrapper.find('.bookmark-form .primary').text()).toBe('Save');
   });
 
   it('status dot carries an accessible label', async () => {

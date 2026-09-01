@@ -18,7 +18,18 @@ const props = defineProps<{
   folderOptions: FolderOption[];
   tagSuggestions: string[];
   busy?: boolean;
+  /** True for a short beat after a successful save — drives the button state. */
+  saved?: boolean;
+  /** Per-field 422 messages, keyed by server field name (url, title, …). */
+  fieldErrors?: Record<string, string[]>;
 }>();
+
+/** First message for a server field, or '' when clean. */
+function fieldError(name: string): string {
+  return props.fieldErrors?.[name]?.[0] ?? '';
+}
+
+const hasFieldErrors = computed(() => Object.keys(props.fieldErrors ?? {}).length > 0);
 
 const emit = defineEmits<{
   (e: 'update:title', v: string): void;
@@ -29,7 +40,10 @@ const emit = defineEmits<{
   (e: 'delete'): void;
 }>();
 
-const submitLabel = computed(() => (props.mode === 'edit' ? 'Save changes' : 'Save'));
+const submitLabel = computed(() => {
+  if (props.saved) return 'Saved ✓';
+  return props.mode === 'edit' ? 'Save changes' : 'Save';
+});
 
 function onFolderChange(e: Event): void {
   const raw = (e.target as HTMLSelectElement).value;
@@ -63,32 +77,41 @@ function disarm(): void {
 
 <template>
   <form class="bookmark-form" @submit.prevent="emit('submit')">
+    <p v-if="hasFieldErrors" class="form-error" role="alert">Please fix the highlighted fields.</p>
+
     <div class="page">
       <img v-if="favicon" :src="favicon" alt="" width="16" height="16" class="fav" />
       <span v-else class="fav fav-blank" aria-hidden="true"></span>
       <span class="url" :title="url">{{ url }}</span>
     </div>
+    <p v-if="fieldError('url')" class="field-error">{{ fieldError('url') }}</p>
 
-    <label class="field">
+    <label class="field" :class="{ 'field--bad': fieldError('title') }">
       <span>Title</span>
       <input
         :value="title"
         type="text"
         autocomplete="off"
+        :aria-invalid="!!fieldError('title')"
         @input="emit('update:title', ($event.target as HTMLInputElement).value)"
       />
+      <span v-if="fieldError('title')" class="field-error">{{ fieldError('title') }}</span>
     </label>
 
-    <label class="field">
+    <label class="field" :class="{ 'field--bad': fieldError('description') }">
       <span>Description</span>
       <textarea
         :value="description"
         rows="2"
+        :aria-invalid="!!fieldError('description')"
         @input="emit('update:description', ($event.target as HTMLTextAreaElement).value)"
       ></textarea>
+      <span v-if="fieldError('description')" class="field-error">
+        {{ fieldError('description') }}
+      </span>
     </label>
 
-    <label class="field">
+    <label class="field" :class="{ 'field--bad': fieldError('folder_id') }">
       <span>Folder</span>
       <select :value="folderId === null ? '' : String(folderId)" @change="onFolderChange">
         <option value="">(Unfiled)</option>
@@ -96,19 +119,21 @@ function disarm(): void {
           {{ opt.label }}
         </option>
       </select>
+      <span v-if="fieldError('folder_id')" class="field-error">{{ fieldError('folder_id') }}</span>
     </label>
 
-    <div class="field">
+    <div class="field" :class="{ 'field--bad': fieldError('tags') }">
       <span>Tags</span>
       <TagInput
         :model-value="tags"
         :suggestions="tagSuggestions"
         @update:model-value="emit('update:tags', $event)"
       />
+      <span v-if="fieldError('tags')" class="field-error">{{ fieldError('tags') }}</span>
     </div>
 
     <div class="actions">
-      <button type="submit" class="primary" :disabled="busy">
+      <button type="submit" class="primary" :class="{ saved }" :disabled="busy || saved">
         {{ submitLabel }}
       </button>
       <button
@@ -182,6 +207,26 @@ function disarm(): void {
   font-family: inherit;
 }
 
+.field--bad input,
+.field--bad textarea,
+.field--bad select {
+  border-color: #b91c1c;
+}
+
+.form-error {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.field-error {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: #b91c1c;
+}
+
 .field textarea {
   resize: vertical;
 }
@@ -207,6 +252,13 @@ function disarm(): void {
 
 .primary:active:not(:disabled) {
   transform: translateY(1px) scale(0.99);
+}
+
+.primary.saved,
+.primary.saved:disabled {
+  background: #16a34a;
+  opacity: 1;
+  cursor: default;
 }
 
 .danger {
@@ -241,6 +293,17 @@ function disarm(): void {
     background: #1e1e1e;
     border-color: #555;
     color: #e8e8e8;
+  }
+
+  .field--bad input,
+  .field--bad textarea,
+  .field--bad select {
+    border-color: #fca5a5;
+  }
+
+  .form-error,
+  .field-error {
+    color: #fca5a5;
   }
 
   .fav-blank {

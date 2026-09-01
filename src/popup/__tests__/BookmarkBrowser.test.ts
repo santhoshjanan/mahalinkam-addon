@@ -58,6 +58,17 @@ describe('BookmarkBrowser — List tab', () => {
     expect(labels).toEqual(['Reading', 'Archive', 'Unfiled']);
     expect(listBookmarks).not.toHaveBeenCalled();
     expect(wrapper.findAll('.bookmark-row')).toHaveLength(0);
+    // orientation line only at root
+    expect(wrapper.find('.lead').exists()).toBe(true);
+  });
+
+  it('the List/Search orientation line disappears once you descend', async () => {
+    listBookmarks.mockResolvedValueOnce(page([bookmark(10)]));
+    const wrapper = mount(BookmarkBrowser, { props: { folders } });
+    await flushPromises();
+    await wrapper.findAll('.row.folder')[0].trigger('click');
+    await flushPromises();
+    expect(wrapper.find('.lead').exists()).toBe(false);
   });
 
   it('descending into a folder fetches its bookmarks and shows its subfolders', async () => {

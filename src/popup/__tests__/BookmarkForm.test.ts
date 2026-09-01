@@ -55,3 +55,46 @@ describe('BookmarkForm — inline two-stage delete', () => {
     vi.useRealTimers();
   });
 });
+
+describe('BookmarkForm — field errors + saved state', () => {
+  it('shows a summary line and per-field messages', () => {
+    const wrapper = mount(BookmarkForm, {
+      props: {
+        mode: 'save' as const,
+        url: 'https://ex.test/1',
+        title: '',
+        description: '',
+        folderId: null,
+        tags: [],
+        folderOptions: [],
+        tagSuggestions: [],
+        fieldErrors: { title: ['Required.'], tags: ['Too many tags.'] },
+      },
+    });
+    expect(wrapper.find('.form-error').text()).toContain('highlighted fields');
+    const msgs = wrapper.findAll('.field-error').map((n) => n.text());
+    expect(msgs).toContain('Required.');
+    expect(msgs).toContain('Too many tags.');
+    expect(wrapper.find('.field--bad').exists()).toBe(true);
+  });
+
+  it('the saved prop switches the primary button to a disabled "Saved" state', () => {
+    const wrapper = mount(BookmarkForm, {
+      props: {
+        mode: 'save' as const,
+        url: 'https://ex.test/1',
+        title: 'T',
+        description: '',
+        folderId: null,
+        tags: [],
+        folderOptions: [],
+        tagSuggestions: [],
+        saved: true,
+      },
+    });
+    const primary = wrapper.find('.primary');
+    expect(primary.text()).toBe('Saved ✓');
+    expect(primary.classes()).toContain('saved');
+    expect(primary.attributes('disabled')).toBeDefined();
+  });
+});

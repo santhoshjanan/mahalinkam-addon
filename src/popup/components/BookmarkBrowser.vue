@@ -142,6 +142,10 @@ function open(url: string): void {
       </template>
     </nav>
 
+    <p v-if="currentScope.kind === 'root'" class="lead">
+      Open a folder to see its bookmarks. To search across everything, use the Search tab.
+    </p>
+
     <ErrorNotice :error="error" @retry="loadBookmarks(true)" />
 
     <ul v-if="initialLoading" class="rows" aria-hidden="true">
@@ -273,6 +277,13 @@ function open(url: string): void {
   color: #9ca3af;
 }
 
+.lead {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #6b7280;
+}
+
 .rows {
   list-style: none;
   margin: 0.25rem 0 0;
@@ -324,20 +335,21 @@ function open(url: string): void {
 
 .edit {
   flex: none;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  font-family: inherit;
+  padding: 0.25rem 0.4rem;
+  font-family:
+    ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   color: #6b7280;
   background: transparent;
-  border: 1px solid #d1d5db;
+  border: none;
   border-radius: 3px;
   cursor: pointer;
 }
 
 .edit:hover {
   color: #1d4ed8;
-  border-color: #1d4ed8;
 }
 
 .ico,
@@ -447,12 +459,10 @@ function open(url: string): void {
 
   .edit {
     color: #9ca3af;
-    border-color: #555;
   }
 
   .edit:hover {
     color: #60a5fa;
-    border-color: #60a5fa;
   }
 
   .fav-blank {

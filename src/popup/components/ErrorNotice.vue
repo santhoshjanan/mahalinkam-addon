@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { AuthError, NetworkError, ServerError } from '../../lib/errors';
+import { AuthError, NetworkError, ServerError, ValidationError } from '../../lib/errors';
 
 const props = defineProps<{ error: unknown }>();
 const emit = defineEmits<{ (e: 'retry'): void; (e: 'settings'): void }>();
@@ -14,6 +14,9 @@ const canRetry = computed(
 // A rejected token is fixed in the options page, not by retrying — offer a jump.
 const isAuth = computed(() => props.error instanceof AuthError);
 
+// 422s are rendered inline against the fields by BookmarkForm, not here.
+const isValidation = computed(() => props.error instanceof ValidationError);
+
 const text = computed(() => {
   const err = props.error;
   if (err instanceof NetworkError) return "Can't reach the server.";
@@ -25,7 +28,7 @@ const text = computed(() => {
 </script>
 
 <template>
-  <div v-if="error" class="notice" role="alert">
+  <div v-if="error && !isValidation" class="notice" role="alert">
     <span class="msg">{{ text }}</span>
     <button v-if="canRetry" type="button" class="retry" @click="emit('retry')">Retry</button>
     <button v-else-if="isAuth" type="button" class="retry" @click="emit('settings')">

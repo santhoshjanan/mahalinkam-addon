@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import browser from 'webextension-polyfill';
 import { getSettings } from '../lib/storage';
 import { apiClient, type Bookmark, type Folder } from '../lib/apiClient';
+import { ValidationError } from '../lib/errors';
 import { buildTree, flattenForSelect } from '../lib/folderTree';
 import { useActiveTab } from './useActiveTab';
 import BookmarkForm from './components/BookmarkForm.vue';
@@ -29,6 +30,9 @@ const formOrigin = ref<'tab' | 'list'>('tab');
 
 /** Polite live-region text: announces save / update / delete to screen readers. */
 const liveMessage = ref('');
+
+/** Brief visible "Saved" state on the primary button before the popup closes. */
+const justSaved = ref(false);
 
 /** Tab-button elements, for roving focus on arrow-key navigation. */
 const tabEls: HTMLButtonElement[] = [];
@@ -68,6 +72,11 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 const error = ref<unknown>(null);
 const busy = ref(false);
 let lastAction: (() => Promise<void>) | null = null;
+
+/** Per-field messages from a 422, keyed by server field name (url, title, …). */
+const fieldErrors = computed<Record<string, string[]>>(() =>
+  error.value instanceof ValidationError ? error.value.fields : {},
+);
 
 const tabUrl = ref('');
 const favicon = ref<string | null | undefined>(undefined);
@@ -208,8 +217,9 @@ function submit(): void {
     }
     notifyBookmarkChanged(tabUrl.value, true);
     liveMessage.value = mode.value === 'edit' ? 'Bookmark updated.' : 'Bookmark saved.';
+    justSaved.value = true;
     // Stamp the mark (unless reduced motion), then dismiss. The short hold also
-    // gives the live region time to announce before the popup is gone.
+    // shows the "Saved" state and lets the live region announce before close.
     if (!reducedMotion) stamping.value = true;
     window.setTimeout(() => window.close(), 400);
   });
@@ -264,7 +274,10 @@ onMounted(async () => {
         ></span>
       </header>
       <h1>Connect your server</h1>
-      <p class="muted">Add your server URL and API token to start saving bookmarks.</p>
+      <p class="muted">
+        Add your server's URL and an API token — create the token in the mahalinkam web UI under
+        Settings → API tokens.
+      </p>
       <button type="button" class="primary" @click="openSettings">Open settings</button>
     </template>
 
@@ -318,6 +331,8 @@ onMounted(async () => {
           :folder-options="folderOptions"
           :tag-suggestions="tagSuggestions"
           :busy="busy"
+          :saved="justSaved"
+          :field-errors="fieldErrors"
           @submit="submit"
           @delete="remove"
         />
