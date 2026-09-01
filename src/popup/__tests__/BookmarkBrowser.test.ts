@@ -50,16 +50,31 @@ beforeEach(() => {
 });
 
 describe('BookmarkBrowser — List tab', () => {
-  it('root shows top-level folders + Unfiled, fetches no bookmarks', async () => {
+  it('does not fetch until the tab is shown (active)', async () => {
     const wrapper = mount(BookmarkBrowser, { props: { folders } });
     await flushPromises();
 
-    const labels = wrapper.findAll('.row.folder .title').map((n) => n.text());
-    expect(labels).toEqual(['Reading', 'Archive', 'Unfiled']);
     expect(listBookmarks).not.toHaveBeenCalled();
-    expect(wrapper.findAll('.bookmark-row')).toHaveLength(0);
-    // orientation line only at root
+    expect(wrapper.findAll('.row.folder .title').map((n) => n.text())).toEqual([
+      'Reading',
+      'Archive',
+    ]);
     expect(wrapper.find('.lead').exists()).toBe(true);
+  });
+
+  it('when active, root shows folders then loose (unfiled) bookmarks', async () => {
+    listBookmarks.mockResolvedValueOnce(
+      page([bookmark(20, { folder_id: null }), bookmark(21, { folder_id: null })]),
+    );
+    const wrapper = mount(BookmarkBrowser, { props: { folders, active: true } });
+    await flushPromises();
+
+    expect(listBookmarks).toHaveBeenCalledWith({ folderId: 'unfiled', page: 1 });
+    expect(wrapper.findAll('.row.folder .title').map((n) => n.text())).toEqual([
+      'Reading',
+      'Archive',
+    ]);
+    expect(wrapper.findAll('.bookmark-row')).toHaveLength(2);
   });
 
   it('the List/Search orientation line disappears once you descend', async () => {
@@ -123,20 +138,10 @@ describe('BookmarkBrowser — List tab', () => {
     expect(wrapper.find('.crumbs').text()).toContain('Reading');
   });
 
-  it('Unfiled entry queries folderId=unfiled', async () => {
-    listBookmarks.mockResolvedValueOnce(page([bookmark(20, { folder_id: null })]));
-    const wrapper = mount(BookmarkBrowser, { props: { folders } });
-    await flushPromises();
-
-    await wrapper.findAll('.row.folder')[2].trigger('click'); // Unfiled
-    await flushPromises();
-
-    expect(listBookmarks).toHaveBeenCalledWith({ folderId: 'unfiled', page: 1 });
-    expect(wrapper.findAll('.bookmark-row')).toHaveLength(1);
-  });
-
-  it('breadcrumb navigates back to root (folders again, no bookmarks)', async () => {
-    listBookmarks.mockResolvedValueOnce(page([bookmark(10)]));
+  it('breadcrumb navigates back to root and re-lists the loose bookmarks', async () => {
+    listBookmarks
+      .mockResolvedValueOnce(page([bookmark(10)])) // descend into Reading
+      .mockResolvedValueOnce(page([bookmark(20, { folder_id: null })])); // back to root
     const wrapper = mount(BookmarkBrowser, { props: { folders } });
     await flushPromises();
     await wrapper.findAll('.row.folder')[0].trigger('click');
@@ -145,12 +150,12 @@ describe('BookmarkBrowser — List tab', () => {
     await wrapper.find('.crumb').trigger('click'); // "All"
     await flushPromises();
 
+    expect(listBookmarks).toHaveBeenLastCalledWith({ folderId: 'unfiled', page: 1 });
     expect(wrapper.findAll('.row.folder .title').map((n) => n.text())).toEqual([
       'Reading',
       'Archive',
-      'Unfiled',
     ]);
-    expect(wrapper.findAll('.bookmark-row')).toHaveLength(0);
+    expect(wrapper.findAll('.bookmark-row')).toHaveLength(1);
   });
 
   it('paginates: Load more appends the next page', async () => {

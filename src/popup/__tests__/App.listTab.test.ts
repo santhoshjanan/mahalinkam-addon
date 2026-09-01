@@ -42,6 +42,11 @@ beforeEach(async () => {
   api.lookup.mockResolvedValue({ found: false });
   api.listFolders.mockResolvedValue([{ id: 2, parent_id: null, name: 'Refs', position: 1 }]);
   api.listTags.mockResolvedValue([]);
+  // Safe default for the List tab's lazy fetch; individual tests override.
+  api.listBookmarks.mockResolvedValue({
+    data: [],
+    meta: { current_page: 1, last_page: 1, total: 0, per_page: 50 },
+  });
 });
 
 describe('popup App — List tab', () => {
@@ -55,17 +60,25 @@ describe('popup App — List tab', () => {
     ]);
   });
 
-  it('clicking List shows the folder browser without a bookmark fetch', async () => {
+  it('clicking List shows the folder browser and lazily fetches loose bookmarks', async () => {
+    api.listBookmarks.mockResolvedValueOnce({
+      data: [bookmark({ id: 5, folder_id: null, title: 'Loose one' })],
+      meta: { current_page: 1, last_page: 1, total: 1, per_page: 50 },
+    });
     const wrapper = mount(App);
     await flushPromises();
+    expect(api.listBookmarks).not.toHaveBeenCalled(); // not until the tab opens
 
     await wrapper.findAll('.tabs button')[1].trigger('click');
+    await flushPromises();
+
     expect(wrapper.find('.crumbs').exists()).toBe(true);
-    expect(api.listBookmarks).not.toHaveBeenCalled();
+    expect(api.listBookmarks).toHaveBeenCalledWith({ folderId: 'unfiled', page: 1 });
+    expect(wrapper.find('#panel-list .bookmark-row .title').text()).toBe('Loose one');
   });
 
   it('row Edit from the List loads that bookmark into the edit form', async () => {
-    api.listBookmarks.mockResolvedValueOnce({
+    api.listBookmarks.mockResolvedValue({
       data: [bookmark()],
       meta: { current_page: 1, last_page: 1, total: 1, per_page: 50 },
     });
@@ -73,7 +86,8 @@ describe('popup App — List tab', () => {
     await flushPromises();
 
     await wrapper.findAll('.tabs button')[1].trigger('click'); // List
-    await wrapper.findAll('.row.folder')[0].trigger('click'); // Refs
+    await flushPromises();
+    await wrapper.findAll('#panel-list .row.folder')[0].trigger('click'); // Refs
     await flushPromises();
 
     await wrapper.find('.bookmark-row .edit').trigger('click');

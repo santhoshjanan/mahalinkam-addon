@@ -360,7 +360,12 @@ onMounted(async () => {
       </section>
 
       <section v-show="view === 'list'" id="panel-list" role="tabpanel" aria-labelledby="tab-list">
-        <BookmarkBrowser ref="browserRef" :folders="rawFolders" @edit="editFromList" />
+        <BookmarkBrowser
+          ref="browserRef"
+          :folders="rawFolders"
+          :active="view === 'list'"
+          @edit="editFromList"
+        />
       </section>
 
       <section

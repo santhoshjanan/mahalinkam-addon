@@ -2,6 +2,14 @@
 
 Status: confirmed 2026-09-01. Design brief only — no code written by shape.
 
+> **Revised in build (2026-09-01):** the "root shows folders only, no bookmarks;
+> click 'Unfiled' to see loose bookmarks" model tested badly — a fresh user with
+> unfiled bookmarks and one empty folder saw "Nothing in this folder yet." and
+> assumed the addon was broken. Root now shows **top-level folders, then every
+> bookmark not in a folder**, inline; the "Unfiled" pseudo-folder is gone. The
+> bookmark fetch is lazy (first time the tab is shown). Everything below stands
+> except that root-scope rule.
+
 ## Target
 
 `mahalinkam-chromium` — `src/popup/App.vue` plus a new `src/popup/components/` view.

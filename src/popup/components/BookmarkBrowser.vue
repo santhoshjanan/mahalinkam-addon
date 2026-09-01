@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import browser from 'webextension-polyfill';
 import { apiClient, type Bookmark, type Folder } from '../../lib/apiClient';
 import { buildTree, type TreeNode } from '../../lib/folderTree';
@@ -8,20 +8,22 @@ import ErrorNotice from './ErrorNotice.vue';
 /**
  * The List tab: a breadcrumb-anchored folder drill-down.
  *
- * - Root ("All") shows top-level folders plus an "Unfiled" entry — never any
- *   bookmarks; you descend to see them.
- * - Inside a folder: its direct subfolders first (non-recursive), then that
- *   folder's bookmarks via `apiClient.listBookmarks({ folderId })`, paged at 50.
+ * - Root ("All") shows top-level folders first, then every bookmark not in a
+ *   folder (`apiClient.listBookmarks({ folderId: 'unfiled' })`), so loose
+ *   bookmarks are visible without a click.
+ * - Inside a folder: its direct subfolders (non-recursive), then that folder's
+ *   bookmarks, paged at 50.
  * - The breadcrumb bar is the only way back up.
  *
  * The folder hierarchy comes from the `folders` prop that `App.vue` already
  * fetched once for the Save-form picker — this component never calls
- * `listFolders()` itself.
+ * `listFolders()` itself. The bookmark fetch is lazy: it fires when the List tab
+ * is first shown (`active`), not on mount.
  */
-const props = defineProps<{ folders: Folder[] }>();
+const props = defineProps<{ folders: Folder[]; active?: boolean }>();
 const emit = defineEmits<{ (e: 'edit', bookmark: Bookmark): void }>();
 
-type Scope = { kind: 'root' } | { kind: 'folder'; id: number } | { kind: 'unfiled' };
+type Scope = { kind: 'root' } | { kind: 'folder'; id: number };
 
 interface Crumb {
   label: string;
@@ -53,53 +55,65 @@ function findNode(nodes: TreeNode[], id: number): TreeNode | null {
 const childFolders = computed<TreeNode[]>(() => {
   const scope = currentScope.value;
   if (scope.kind === 'root') return tree.value;
-  if (scope.kind === 'folder') return findNode(tree.value, scope.id)?.children ?? [];
-  return [];
+  return findNode(tree.value, scope.id)?.children ?? [];
 });
 
-const showUnfiledEntry = computed(() => currentScope.value.kind === 'root');
 const hasMore = computed(() => page.value < lastPage.value);
-const initialLoading = computed(() => loading.value && bookmarks.value.length === 0);
+const initialLoading = computed(
+  () => loading.value && bookmarks.value.length === 0 && childFolders.value.length === 0,
+);
 const isEmpty = computed(
   () =>
-    currentScope.value.kind !== 'root' &&
     !loading.value &&
     !error.value &&
     childFolders.value.length === 0 &&
     bookmarks.value.length === 0,
 );
 
+/** The `folder_id` filter for the current scope: a folder id, or `unfiled` at
+ *  root (which lists every bookmark not in a folder). */
+const scopeFilter = computed(() =>
+  currentScope.value.kind === 'root' ? 'unfiled' : String(currentScope.value.id),
+);
+
+let reqSeq = 0;
 async function loadBookmarks(reset: boolean): Promise<void> {
-  const scope = currentScope.value;
-  if (scope.kind === 'root') {
-    bookmarks.value = [];
-    error.value = null;
-    return;
-  }
-  const folderId = scope.kind === 'unfiled' ? 'unfiled' : String(scope.id);
+  const seq = ++reqSeq;
   loading.value = true;
   error.value = null;
   try {
-    const res = await apiClient.listBookmarks({ folderId, page: reset ? 1 : page.value });
+    const res = await apiClient.listBookmarks({
+      folderId: scopeFilter.value,
+      page: reset ? 1 : page.value,
+    });
+    if (seq !== reqSeq) return; // a newer navigation superseded this one
     page.value = res.meta.current_page;
     lastPage.value = res.meta.last_page;
     bookmarks.value = reset ? res.data : [...bookmarks.value, ...res.data];
   } catch (err) {
+    if (seq !== reqSeq) return;
     error.value = err;
     if (reset) bookmarks.value = [];
   } finally {
-    loading.value = false;
+    if (seq === reqSeq) loading.value = false;
   }
 }
 
+/** Lazy first load: fetch the root's loose bookmarks when the tab first opens. */
+let loadedOnce = false;
+watch(
+  () => props.active,
+  (on) => {
+    if (on && !loadedOnce) {
+      loadedOnce = true;
+      void loadBookmarks(true);
+    }
+  },
+  { immediate: true },
+);
+
 function enterFolder(node: TreeNode): void {
   crumbs.value = [...crumbs.value, { label: node.name, scope: { kind: 'folder', id: node.id } }];
-  page.value = 1;
-  void loadBookmarks(true);
-}
-
-function enterUnfiled(): void {
-  crumbs.value = [...crumbs.value, { label: 'Unfiled', scope: { kind: 'unfiled' } }];
   page.value = 1;
   void loadBookmarks(true);
 }
@@ -142,10 +156,7 @@ onBeforeUnmount(() => clearTimeout(flashTimer));
 
 function scopeHolds(bm: Bookmark): boolean {
   const scope = currentScope.value;
-  return (
-    (scope.kind === 'folder' && bm.folder_id === scope.id) ||
-    (scope.kind === 'unfiled' && bm.folder_id === null)
-  );
+  return scope.kind === 'root' ? bm.folder_id === null : bm.folder_id === scope.id;
 }
 
 /** Drop a row the form just deleted. */
@@ -181,7 +192,7 @@ defineExpose({ applyDelete, applyUpdate });
     </nav>
 
     <p v-if="currentScope.kind === 'root'" class="lead">
-      Open a folder to see its bookmarks. To search across everything, use the Search tab.
+      Your folders, then bookmarks not in a folder. Use the Search tab to search by text.
     </p>
 
     <Transition name="flash">
@@ -225,37 +236,6 @@ defineExpose({ applyDelete, applyUpdate });
         </button>
       </li>
 
-      <li v-if="showUnfiledEntry">
-        <button type="button" class="row folder" @click="enterUnfiled">
-          <svg
-            class="ico"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M22 12h-6l-2 3h-4l-2-3H2" />
-            <path
-              d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-            />
-          </svg>
-          <span class="meta"><span class="title">Unfiled</span></span>
-          <svg
-            class="chev"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            aria-hidden="true"
-          >
-            <path d="m9 18 6-6-6-6" />
-          </svg>
-        </button>
-      </li>
-
       <li v-for="b in bookmarks" :key="`b${b.id}`" class="bookmark-row">
         <button type="button" class="row open" @click="open(b.url)">
           <img
@@ -280,7 +260,9 @@ defineExpose({ applyDelete, applyUpdate });
 
     <p v-if="loading && bookmarks.length > 0" class="hint">Loading…</p>
     <button v-else-if="hasMore" type="button" class="more" @click="loadMore">Load more</button>
-    <p v-else-if="isEmpty" class="hint">Nothing in this folder yet.</p>
+    <p v-else-if="isEmpty" class="hint">
+      {{ currentScope.kind === 'root' ? 'No bookmarks yet.' : 'Nothing in this folder yet.' }}
+    </p>
   </div>
 </template>
 

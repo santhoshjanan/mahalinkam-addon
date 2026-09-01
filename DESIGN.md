@@ -239,7 +239,10 @@ fill `row-hover`.
 
 The List tab adds a wrapping breadcrumb bar above the scroll area (`All › Folder ›
 Subfolder`); crumbs are `accent` text buttons, the last crumb is plain bold
-`text`.
+`text`. **Root ("All") shows top-level folders first, then every bookmark not in
+a folder** — so loose bookmarks are visible with no extra click. Descending a
+folder shows its direct subfolders then its bookmarks. The bookmark fetch is
+lazy: it fires the first time the tab is shown, not on popup open.
 
 Forms: stacked `label > span + control` blocks, `0.6rem` gap, full-width controls
 with `box-sizing: border-box`. Actions row is primary button (`flex: 1`) beside an
@@ -293,7 +296,7 @@ frame). Within it:
 - Borders are 1px, hairline-weight throughout — the segmented control replaced
   the old 2px underline, so there are no 2px strokes left.
 - Icons are 16px line icons drawn with `currentColor` (`stroke-width: 2`,
-  round caps/joins) — folder, inbox (Unfiled), chevron. They inherit text color
+  round caps/joins) — folder, chevron. They inherit text color
   and dim to `muted` for the trailing chevron.
 
 ## Components
@@ -359,13 +362,14 @@ frame). Within it:
 - **Skeleton row** — 2rem tall `hairline` (light) / `skeleton-dark` (dark) block,
   `4px` radius, gentle opacity pulse; 3 shown during first load of a folder.
 - **Orientation line** — a single `0.75rem` `muted` sentence at the List tab's
-  root scope only ("Open a folder to see its bookmarks. To search across
-  everything, use the Search tab."); gone once you descend.
+  root scope only ("Your folders, then bookmarks not in a folder. Use the Search
+  tab to search by text."); gone once you descend.
 - **Flash line** — a `0.75rem/600` `muted` `role="status"` line below the
   breadcrumb, shown for ~2.2s after an edit/delete done in the form
   ("Bookmark deleted / updated / moved"), then it fades out.
-- **Empty / hint text** — single `meta`-size `muted` line ("Nothing in this
-  folder yet.", "No matches.").
+- **Empty / hint text** — single `meta`-size `muted` line; "No bookmarks yet." at
+  the List root, "Nothing in this folder yet." inside a folder, "No matches." in
+  Search.
 
 ## Do's and Don'ts
 
