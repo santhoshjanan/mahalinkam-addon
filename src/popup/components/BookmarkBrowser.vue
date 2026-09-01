@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import browser from 'webextension-polyfill';
 import { apiClient, type Bookmark, type Folder } from '../../lib/apiClient';
 import { buildTree, type TreeNode } from '../../lib/folderTree';
+import { withViewTransition } from '../../lib/viewTransition';
 import ErrorNotice from './ErrorNotice.vue';
 
 /**
@@ -113,15 +114,21 @@ watch(
 );
 
 function enterFolder(node: TreeNode): void {
-  crumbs.value = [...crumbs.value, { label: node.name, scope: { kind: 'folder', id: node.id } }];
-  page.value = 1;
+  void withViewTransition(async () => {
+    crumbs.value = [...crumbs.value, { label: node.name, scope: { kind: 'folder', id: node.id } }];
+    page.value = 1;
+    await nextTick();
+  }, 'drill-in');
   void loadBookmarks(true);
 }
 
 function goToCrumb(index: number): void {
   if (index >= crumbs.value.length - 1) return;
-  crumbs.value = crumbs.value.slice(0, index + 1);
-  page.value = 1;
+  void withViewTransition(async () => {
+    crumbs.value = crumbs.value.slice(0, index + 1);
+    page.value = 1;
+    await nextTick();
+  }, 'drill-out');
   void loadBookmarks(true);
 }
 

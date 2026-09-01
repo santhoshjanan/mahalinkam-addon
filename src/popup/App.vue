@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import browser from 'webextension-polyfill';
 import { getSettings } from '../lib/storage';
 import { apiClient, type Bookmark, type Folder } from '../lib/apiClient';
 import { ValidationError } from '../lib/errors';
 import { buildTree, flattenForSelect } from '../lib/folderTree';
+import { supportsViewTransitions, withViewTransition } from '../lib/viewTransition';
 import { useActiveTab } from './useActiveTab';
 import BookmarkForm from './components/BookmarkForm.vue';
 import BookmarkBrowser from './components/BookmarkBrowser.vue';
@@ -36,6 +37,9 @@ const liveMessage = ref('');
 
 /** Brief visible "Saved" state on the primary button before the popup closes. */
 const justSaved = ref(false);
+/** During the "file into the mark" View Transition the body content is dropped
+ *  so only the identity band remains to catch the collapse. */
+const filing = ref(false);
 
 /** Tab-button elements, for roving focus on arrow-key navigation. */
 const tabEls: HTMLButtonElement[] = [];
@@ -44,10 +48,29 @@ function setTabEl(el: unknown, i: number): void {
 }
 
 /** Activate a view from the tab bar. Selecting the form tab clears the
- *  "came from List" origin so the back-link only shows on a real List hand-off. */
+ *  "came from List" origin so the back-link only shows on a real List hand-off.
+ *  The panel + tab indicator morph via a View Transition, directed by tab order. */
 function selectView(v: View): void {
-  if (v === 'form') formOrigin.value = 'tab';
-  view.value = v;
+  if (v === view.value) return;
+  const forward = VIEWS.indexOf(v) > VIEWS.indexOf(view.value);
+  void withViewTransition(
+    async () => {
+      if (v === 'form') formOrigin.value = 'tab';
+      view.value = v;
+      await nextTick();
+    },
+    forward ? 'tab-fwd' : 'tab-back',
+  );
+}
+
+function toggleSettings(): void {
+  void withViewTransition(
+    async () => {
+      showSettings.value = !showSettings.value;
+      await nextTick();
+    },
+    showSettings.value ? 'settings-out' : 'settings-in',
+  );
 }
 
 /** ARIA tabs pattern: arrows move selection + focus, Home/End jump to ends. */
@@ -210,13 +233,19 @@ function editFromList(b: Bookmark): void {
   };
   error.value = null;
   formOrigin.value = 'list';
-  view.value = 'form';
+  void withViewTransition(async () => {
+    view.value = 'form';
+    await nextTick();
+  }, 'to-form');
 }
 
 /** Return to the List tab from a row-edit, keeping its browse position. */
 function backToList(): void {
   formOrigin.value = 'tab';
-  view.value = 'list';
+  void withViewTransition(async () => {
+    view.value = 'list';
+    await nextTick();
+  }, 'to-list');
 }
 
 /**
@@ -231,10 +260,19 @@ function finishOrReturn(reconcile: (b: typeof browserRef.value) => void, stamp: 
     backToList();
     return;
   }
-  if (stamp) {
-    justSaved.value = true;
-    if (!reducedMotion) stamping.value = true;
+  if (stamp) justSaved.value = true;
+
+  // "File into the mark": the form surface collapses toward the identity mark,
+  // which pulses to receive it, then the popup dismisses. Degrades to the
+  // stamp + hold on reduced motion / Firefox < 129.
+  if (stamp && !reducedMotion && supportsViewTransitions()) {
+    void withViewTransition(async () => {
+      filing.value = true;
+      await nextTick();
+    }, 'filing').then(() => window.close());
+    return;
   }
+  if (stamp && !reducedMotion) stamping.value = true;
   window.setTimeout(() => window.close(), 400);
 }
 
@@ -338,7 +376,7 @@ onMounted(async () => {
           :class="{ on: showSettings }"
           :aria-pressed="showSettings"
           :aria-label="showSettings ? 'Close settings' : 'Settings'"
-          @click="showSettings = !showSettings"
+          @click="toggleSettings"
         >
           <svg
             viewBox="0 0 24 24"
@@ -361,7 +399,7 @@ onMounted(async () => {
         @disconnected="onDisconnected"
       />
 
-      <template v-else>
+      <template v-else-if="!filing">
         <nav class="tabs" role="tablist" aria-label="Views">
           <button
             v-for="(v, i) in VIEWS"
@@ -374,6 +412,7 @@ onMounted(async () => {
             :aria-selected="view === v"
             :tabindex="view === v ? 0 : -1"
             :class="{ on: view === v }"
+            :style="view === v ? 'view-transition-name: tab-indicator' : ''"
             @click="selectView(v)"
             @keydown="onTabKeydown"
           >
@@ -386,6 +425,7 @@ onMounted(async () => {
         <section
           v-show="view === 'form'"
           id="panel-form"
+          class="section-panel"
           role="tabpanel"
           aria-labelledby="tab-form"
         >
@@ -417,6 +457,7 @@ onMounted(async () => {
         <section
           v-show="view === 'list'"
           id="panel-list"
+          class="section-panel"
           role="tabpanel"
           aria-labelledby="tab-list"
         >
@@ -431,6 +472,7 @@ onMounted(async () => {
         <section
           v-show="view === 'search'"
           id="panel-search"
+          class="section-panel"
           role="tabpanel"
           aria-labelledby="tab-search"
         >
@@ -449,6 +491,21 @@ onMounted(async () => {
   padding: 0.85rem;
   font-family: system-ui, sans-serif;
   color: #1a1a1a;
+}
+
+/* View-transition group anchors — one snapshot per named element; only the
+   visible section claims `panel`, so all three share the name. */
+.brandbar {
+  view-transition-name: brandbar;
+}
+.tabs {
+  view-transition-name: tab-bar;
+}
+.section-panel {
+  view-transition-name: panel;
+}
+.mark {
+  view-transition-name: id-mark;
 }
 
 /* --- Identity band -------------------------------------------------------- */
@@ -726,6 +783,148 @@ h1 {
     color: #fff;
     background: #2563eb;
     box-shadow: none;
+  }
+}
+</style>
+
+<!-- View Transitions live on the document root, so these ::view-transition-*
+     rules must be UNSCOPED. Everything here is gated on prefers-reduced-motion
+     and only fires when `withViewTransition` set <html data-vt="…">. -->
+<style>
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-group(*) {
+    animation-duration: 240ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* The filled tab indicator glides between segments, with a hair of overshoot. */
+  ::view-transition-group(tab-indicator) {
+    animation-duration: 260ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  /* --- Panel swap: tab switch, and form <-> list hand-off ------------------ */
+  ::view-transition-old(panel),
+  ::view-transition-new(panel) {
+    animation-duration: 210ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  [data-vt='tab-fwd']::view-transition-old(panel),
+  [data-vt='to-list']::view-transition-old(panel),
+  [data-vt='drill-in']::view-transition-old(panel) {
+    animation-name: vt-out-left;
+  }
+  [data-vt='tab-fwd']::view-transition-new(panel),
+  [data-vt='to-list']::view-transition-new(panel),
+  [data-vt='drill-in']::view-transition-new(panel) {
+    animation-name: vt-in-right;
+  }
+  [data-vt='tab-back']::view-transition-old(panel),
+  [data-vt='to-form']::view-transition-old(panel),
+  [data-vt='drill-out']::view-transition-old(panel) {
+    animation-name: vt-out-right;
+  }
+  [data-vt='tab-back']::view-transition-new(panel),
+  [data-vt='to-form']::view-transition-new(panel),
+  [data-vt='drill-out']::view-transition-new(panel) {
+    animation-name: vt-in-left;
+  }
+
+  @keyframes vt-out-left {
+    to {
+      opacity: 0;
+      transform: translateX(-16px);
+    }
+  }
+  @keyframes vt-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+  }
+  @keyframes vt-out-right {
+    to {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+  }
+  @keyframes vt-in-left {
+    from {
+      opacity: 0;
+      transform: translateX(-16px);
+    }
+  }
+
+  /* --- Settings wipes in from the gear (top-right) ----------------------- */
+  [data-vt='settings-in']::view-transition-new(root) {
+    animation: vt-wipe-gear 260ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  [data-vt='settings-in']::view-transition-old(tab-bar),
+  [data-vt='settings-in']::view-transition-old(panel) {
+    animation: vt-fade-scale-out 170ms ease-in forwards;
+  }
+  [data-vt='settings-out']::view-transition-old(root) {
+    animation: vt-wipe-gear 230ms cubic-bezier(0.4, 0, 1, 1) reverse forwards;
+  }
+  [data-vt='settings-out']::view-transition-new(tab-bar),
+  [data-vt='settings-out']::view-transition-new(panel) {
+    animation: vt-fade-scale-in 220ms ease-out;
+  }
+
+  @keyframes vt-wipe-gear {
+    from {
+      clip-path: circle(0% at 93% 6%);
+      opacity: 0.5;
+    }
+    to {
+      clip-path: circle(150% at 93% 6%);
+      opacity: 1;
+    }
+  }
+  @keyframes vt-fade-scale-out {
+    to {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+  @keyframes vt-fade-scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+
+  /* --- Save: the surface folds up-and-left into the mark, which catches it - */
+  [data-vt='filing']::view-transition-group(id-mark) {
+    animation: vt-mark-receive 300ms cubic-bezier(0.25, 0.8, 0.4, 1);
+  }
+  [data-vt='filing']::view-transition-old(brandbar),
+  [data-vt='filing']::view-transition-old(tab-bar),
+  [data-vt='filing']::view-transition-old(panel),
+  [data-vt='filing']::view-transition-old(root) {
+    animation: vt-collapse-to-mark 280ms cubic-bezier(0.55, 0, 0.85, 0) forwards;
+    transform-origin: top left;
+  }
+  [data-vt='filing']::view-transition-new(root) {
+    display: none;
+  }
+
+  @keyframes vt-mark-receive {
+    0% {
+      transform: scale(1);
+    }
+    45% {
+      transform: scale(1.55);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  @keyframes vt-collapse-to-mark {
+    to {
+      opacity: 0;
+      transform: scale(0.5) translate(-4px, -6px);
+    }
   }
 }
 </style>

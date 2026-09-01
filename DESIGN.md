@@ -287,7 +287,23 @@ frame). Within it:
     "stamp" (scale `1 → 0.86 → 1`, offset shadow snapping `3px → 1px → 3px` — a
     rubber-stamp hitting paper); the popup then holds ~400ms (so the live region
     can announce) and dismisses. Under reduced motion the stamp is skipped but
-    the ~400ms hold stays.
+    the ~400ms hold stays. **Where `document.startViewTransition` exists** (Chrome
+    111+, Firefox 129+) this becomes the _file-into-the-mark_ transition instead:
+    the body content is dropped and the identity band collapses `scale(0.5)` +
+    fade toward the top-left while the `id-mark` group pulses to `scale(1.55)` to
+    "catch" it (~300ms firm ease-out), then close.
+  - **View Transitions (progressive enhancement)** — every popup state change is
+    wrapped in `withViewTransition(update, name)`, which sets `<html data-vt>` so
+    the (unscoped) `::view-transition-*` rules pick the choreography, and which
+    degrades to the instant state change when the API is missing or reduced
+    motion is set. Named groups: `brandbar`, `tab-bar`, `panel` (shared by all
+    three sections — only the visible one is snapshotted), `id-mark`,
+    `tab-indicator` (on the active tab). The moves: tab switch → the filled
+    indicator glides between segments (firm ease-out, no bounce) while panels
+    slide ±16px in the tab-order direction; form ↔ list hand-off and folder
+    drill-in/out use the same directional panel slide; Settings wipes in/out
+    from a `circle()` clip-path anchored at the gear (top-right). ~210–300ms,
+    no bounce curves.
   - The "connected" **status dot** breathes on a calm 3s `box-shadow` ring
     (`0 0 0 3px → 5px`) — the single deliberate perpetual loop, kept subliminal
     so it reads as "alive" not "nagging". Off entirely under reduced motion.
