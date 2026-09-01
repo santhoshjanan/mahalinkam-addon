@@ -116,7 +116,7 @@ onBeforeUnmount(() => {
 .hint {
   margin: 0.6rem 0 0;
   font-size: 0.82rem;
-  color: #666;
+  color: #6b7280;
 }
 
 .rows {

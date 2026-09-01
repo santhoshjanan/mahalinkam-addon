@@ -91,8 +91,8 @@ function onKeydown(e: KeyboardEvent): void {
   gap: 0.2rem;
   padding: 0.1rem 0.35rem;
   font-size: 0.78rem;
-  background: #e0e7ff;
-  color: #3730a3;
+  background: #dde7fb;
+  color: #1d4ed8;
   border-radius: 3px;
 }
 
@@ -144,7 +144,7 @@ function onKeydown(e: KeyboardEvent): void {
 }
 
 .suggest button:hover {
-  background: #eef2ff;
+  background: #eef3fd;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -155,12 +155,12 @@ function onKeydown(e: KeyboardEvent): void {
   }
 
   .chip {
-    background: #3730a3;
-    color: #e0e7ff;
+    background: #1e3a8a;
+    color: #dbe4fb;
   }
 
   .suggest button:hover {
-    background: #2a2a3a;
+    background: #262626;
   }
 }
 </style>

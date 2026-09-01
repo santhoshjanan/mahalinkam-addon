@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "rgba(0, 0, 0, 0.12)",
+        "createdAt": "2026-09-01T15:07:55.478Z",
+        "reason": "autocomplete popover shadow — the one sanctioned blurred elevation, documented in DESIGN.md Elevation & Depth + Components; a shadow value, not a palette fill"
+      }
+    ]
+  }
+}

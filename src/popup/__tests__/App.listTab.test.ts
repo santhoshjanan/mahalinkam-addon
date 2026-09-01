@@ -34,6 +34,7 @@ function bookmark(over: Partial<Bookmark> = {}): Bookmark {
 beforeEach(async () => {
   vi.clearAllMocks();
   browserMock.__reset();
+  vi.spyOn(window, 'close').mockImplementation(() => {});
   await browserMock.storage.local.set({ serverUrl: 'https://mhl.test', token: 'tok' });
   browserMock.tabs.query.mockResolvedValue([
     { url: 'https://current.test/x', title: 'X', favIconUrl: '' },
@@ -83,5 +84,71 @@ describe('popup App — List tab', () => {
     expect(wrapper.find<HTMLInputElement>('input[type="text"]').element.value).toBe('Saved Page');
     expect(wrapper.find('.bookmark-form .url').text()).toBe('https://saved.test/page');
     expect(wrapper.find('.bookmark-form .danger').exists()).toBe(true);
+  });
+
+  it('tab bar implements the ARIA tab pattern (roving tabindex + arrow keys)', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const tabs = () => wrapper.findAll('.tabs button');
+    expect(tabs()[0].attributes('role')).toBe('tab');
+    expect(tabs()[0].attributes('aria-controls')).toBe('panel-form');
+    expect(tabs()[0].attributes('tabindex')).toBe('0');
+    expect(tabs()[1].attributes('tabindex')).toBe('-1');
+
+    await tabs()[0].trigger('keydown', { key: 'ArrowRight' });
+    expect(tabs()[1].attributes('aria-selected')).toBe('true');
+    expect(tabs()[1].attributes('tabindex')).toBe('0');
+    expect(tabs()[0].attributes('tabindex')).toBe('-1');
+    expect(wrapper.find('#panel-list').isVisible()).toBe(true);
+
+    await tabs()[1].trigger('keydown', { key: 'Home' });
+    expect(tabs()[0].attributes('aria-selected')).toBe('true');
+  });
+
+  it('row-edit shows "Back to list" and returns without losing browse position', async () => {
+    api.listBookmarks.mockResolvedValue({
+      data: [bookmark()],
+      meta: { current_page: 1, last_page: 1, total: 1, per_page: 50 },
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+
+    await wrapper.findAll('.tabs button')[1].trigger('click'); // List
+    await wrapper.findAll('#panel-list .row.folder')[0].trigger('click'); // into "Refs"
+    await flushPromises();
+    expect(wrapper.find('#panel-list .crumbs').text()).toContain('Refs');
+
+    await wrapper.find('.bookmark-row .edit').trigger('click');
+    await flushPromises();
+
+    const back = wrapper.find('.backlink');
+    expect(back.exists()).toBe(true);
+    await back.trigger('click');
+
+    expect(wrapper.find('#panel-list').isVisible()).toBe(true);
+    expect(wrapper.find('#panel-form').isVisible()).toBe(false);
+    // BookmarkBrowser stayed mounted → still inside "Refs", not reset to root
+    expect(wrapper.find('#panel-list .crumbs').text()).toContain('Refs');
+    expect(wrapper.find('.backlink').exists()).toBe(false);
+  });
+
+  it('announces a save through the polite live region', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    await wrapper.find('.bookmark-form').trigger('submit');
+    await flushPromises();
+
+    expect(api.createBookmark).toHaveBeenCalled();
+    expect(wrapper.find('[role="status"]').text()).toBe('Bookmark saved.');
+  });
+
+  it('status dot carries an accessible label', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+    const dot = wrapper.find('.status');
+    expect(dot.attributes('role')).toBe('img');
+    expect(dot.attributes('aria-label')).toBe('Server connected');
   });
 });

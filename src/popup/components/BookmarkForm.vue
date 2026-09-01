@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import TagInput from './TagInput.vue';
 
 interface FolderOption {
@@ -34,6 +34,30 @@ const submitLabel = computed(() => (props.mode === 'edit' ? 'Save changes' : 'Sa
 function onFolderChange(e: Event): void {
   const raw = (e.target as HTMLSelectElement).value;
   emit('update:folderId', raw === '' ? null : Number(raw));
+}
+
+/**
+ * Inline two-stage delete instead of a native window.confirm (which drops out of
+ * the popup's visual world). First click arms; second click within the window
+ * commits; it disarms on blur or after a few seconds.
+ */
+const armed = ref(false);
+let disarmTimer: ReturnType<typeof setTimeout> | undefined;
+
+function onDeleteClick(): void {
+  if (armed.value) {
+    clearTimeout(disarmTimer);
+    armed.value = false;
+    emit('delete');
+    return;
+  }
+  armed.value = true;
+  disarmTimer = setTimeout(() => (armed.value = false), 3500);
+}
+
+function disarm(): void {
+  clearTimeout(disarmTimer);
+  armed.value = false;
 }
 </script>
 
@@ -91,10 +115,13 @@ function onFolderChange(e: Event): void {
         v-if="mode === 'edit'"
         type="button"
         class="danger"
+        :class="{ armed }"
         :disabled="busy"
-        @click="emit('delete')"
+        :aria-label="armed ? 'Confirm delete bookmark' : 'Delete bookmark'"
+        @click="onDeleteClick"
+        @blur="disarm"
       >
-        Delete
+        {{ armed ? 'Confirm?' : 'Delete' }}
       </button>
     </div>
   </form>
@@ -171,10 +198,15 @@ function onFolderChange(e: Event): void {
   font-size: 0.88rem;
   font-weight: 600;
   color: #fff;
-  background: #2563eb;
+  background: #1d4ed8;
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  transition: transform 90ms ease;
+}
+
+.primary:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
 }
 
 .danger {
@@ -186,6 +218,14 @@ function onFolderChange(e: Event): void {
   border: 1px solid #b91c1c;
   border-radius: 4px;
   cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.danger.armed {
+  color: #fff;
+  background: #b91c1c;
 }
 
 .primary:disabled,

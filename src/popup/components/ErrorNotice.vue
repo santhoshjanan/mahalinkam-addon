@@ -3,13 +3,16 @@ import { computed } from 'vue';
 import { AuthError, NetworkError, ServerError } from '../../lib/errors';
 
 const props = defineProps<{ error: unknown }>();
-const emit = defineEmits<{ (e: 'retry'): void }>();
+const emit = defineEmits<{ (e: 'retry'): void; (e: 'settings'): void }>();
 
 // Retryable: a network blip, or a transient 5xx from a self-hoster's proxy.
 // Not retryable: AuthError / ValidationError (retrying changes nothing).
 const canRetry = computed(
   () => props.error instanceof NetworkError || props.error instanceof ServerError,
 );
+
+// A rejected token is fixed in the options page, not by retrying — offer a jump.
+const isAuth = computed(() => props.error instanceof AuthError);
 
 const text = computed(() => {
   const err = props.error;
@@ -25,6 +28,9 @@ const text = computed(() => {
   <div v-if="error" class="notice" role="alert">
     <span class="msg">{{ text }}</span>
     <button v-if="canRetry" type="button" class="retry" @click="emit('retry')">Retry</button>
+    <button v-else-if="isAuth" type="button" class="retry" @click="emit('settings')">
+      Settings
+    </button>
   </div>
 </template>
 

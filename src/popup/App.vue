@@ -14,6 +14,8 @@ type Phase = 'loading' | 'setup' | 'ready';
 type View = 'form' | 'list' | 'search';
 type Mode = 'save' | 'edit';
 
+const VIEWS: View[] = ['form', 'list', 'search'];
+
 interface FolderOption {
   value: number | null;
   label: string;
@@ -22,6 +24,46 @@ interface FolderOption {
 const phase = ref<Phase>('loading');
 const view = ref<View>('form');
 const mode = ref<Mode>('save');
+/** Whether the form was opened from its tab or from a List-row "Edit". */
+const formOrigin = ref<'tab' | 'list'>('tab');
+
+/** Polite live-region text: announces save / update / delete to screen readers. */
+const liveMessage = ref('');
+
+/** Tab-button elements, for roving focus on arrow-key navigation. */
+const tabEls: HTMLButtonElement[] = [];
+function setTabEl(el: unknown, i: number): void {
+  if (el instanceof HTMLButtonElement) tabEls[i] = el;
+}
+
+/** Activate a view from the tab bar. Selecting the form tab clears the
+ *  "came from List" origin so the back-link only shows on a real List hand-off. */
+function selectView(v: View): void {
+  if (v === 'form') formOrigin.value = 'tab';
+  view.value = v;
+}
+
+/** ARIA tabs pattern: arrows move selection + focus, Home/End jump to ends. */
+function onTabKeydown(e: KeyboardEvent): void {
+  const i = VIEWS.indexOf(view.value);
+  let next: number;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (i + 1) % VIEWS.length;
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp')
+    next = (i - 1 + VIEWS.length) % VIEWS.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = VIEWS.length - 1;
+  else return;
+  e.preventDefault();
+  selectView(VIEWS[next]);
+  tabEls[next]?.focus();
+}
+
+/**
+ * Brief "stamp" flourish on the identity mark when a save lands — a single
+ * confirmation beat before the popup dismisses. Purely cosmetic.
+ */
+const stamping = ref(false);
+const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 const error = ref<unknown>(null);
 const busy = ref(false);
@@ -135,7 +177,14 @@ function editFromList(b: Bookmark): void {
     tags: b.tags.map((t) => t.name),
   };
   error.value = null;
+  formOrigin.value = 'list';
   view.value = 'form';
+}
+
+/** Return to the List tab from a row-edit, keeping its browse position. */
+function backToList(): void {
+  formOrigin.value = 'tab';
+  view.value = 'list';
 }
 
 function submit(): void {
@@ -158,18 +207,23 @@ function submit(): void {
       });
     }
     notifyBookmarkChanged(tabUrl.value, true);
-    window.close();
+    liveMessage.value = mode.value === 'edit' ? 'Bookmark updated.' : 'Bookmark saved.';
+    // Stamp the mark (unless reduced motion), then dismiss. The short hold also
+    // gives the live region time to announce before the popup is gone.
+    if (!reducedMotion) stamping.value = true;
+    window.setTimeout(() => window.close(), 400);
   });
 }
 
 function remove(): void {
   if (existingId.value === null) return;
-  if (!window.confirm('Delete this bookmark?')) return;
+  // Confirmation is handled inline by the form's two-stage Delete button.
   const id = existingId.value;
   void run(async () => {
     await apiClient.deleteBookmark(id);
     notifyBookmarkChanged(tabUrl.value, false);
-    window.close();
+    liveMessage.value = 'Bookmark deleted.';
+    window.setTimeout(() => window.close(), 400);
   });
 }
 
@@ -199,23 +253,58 @@ onMounted(async () => {
     </template>
 
     <template v-else-if="phase === 'setup'">
-      <h1>Set up mahalinkam</h1>
+      <header class="brandbar">
+        <span class="mark" aria-hidden="true"></span>
+        <span class="wordmark">mahalinkam</span>
+        <span
+          class="status status--off"
+          role="img"
+          aria-label="Server not connected"
+          title="Not connected"
+        ></span>
+      </header>
+      <h1>Connect your server</h1>
       <p class="muted">Add your server URL and API token to start saving bookmarks.</p>
       <button type="button" class="primary" @click="openSettings">Open settings</button>
     </template>
 
     <template v-else>
-      <nav class="tabs">
-        <button type="button" :class="{ on: view === 'form' }" @click="view = 'form'">
-          {{ mode === 'edit' ? 'Edit' : 'Save' }}
-        </button>
-        <button type="button" :class="{ on: view === 'list' }" @click="view = 'list'">List</button>
-        <button type="button" :class="{ on: view === 'search' }" @click="view = 'search'">
-          Search
+      <header class="brandbar">
+        <span class="mark" :class="{ stamping }" aria-hidden="true"></span>
+        <span class="wordmark">mahalinkam</span>
+        <span
+          class="status status--on"
+          role="img"
+          aria-label="Server connected"
+          title="Connected"
+        ></span>
+      </header>
+
+      <nav class="tabs" role="tablist" aria-label="Views">
+        <button
+          v-for="(v, i) in VIEWS"
+          :id="`tab-${v}`"
+          :key="v"
+          :ref="(el) => setTabEl(el, i)"
+          type="button"
+          role="tab"
+          :aria-controls="`panel-${v}`"
+          :aria-selected="view === v"
+          :tabindex="view === v ? 0 : -1"
+          :class="{ on: view === v }"
+          @click="selectView(v)"
+          @keydown="onTabKeydown"
+        >
+          {{
+            v === 'form' ? (mode === 'edit' ? 'Edit' : 'Save') : v === 'list' ? 'List' : 'Search'
+          }}
         </button>
       </nav>
 
-      <section v-if="view === 'form'">
+      <section v-show="view === 'form'" id="panel-form" role="tabpanel" aria-labelledby="tab-form">
+        <button v-if="formOrigin === 'list'" type="button" class="backlink" @click="backToList">
+          ← Back to list
+        </button>
         <p v-if="!savable" class="muted">This page can't be saved.</p>
         <BookmarkForm
           v-else
@@ -232,17 +321,24 @@ onMounted(async () => {
           @submit="submit"
           @delete="remove"
         />
-        <ErrorNotice :error="error" @retry="retry" />
+        <ErrorNotice :error="error" @retry="retry" @settings="openSettings" />
       </section>
 
-      <section v-else-if="view === 'list'">
+      <section v-show="view === 'list'" id="panel-list" role="tabpanel" aria-labelledby="tab-list">
         <BookmarkBrowser :folders="rawFolders" @edit="editFromList" />
       </section>
 
-      <section v-else>
+      <section
+        v-show="view === 'search'"
+        id="panel-search"
+        role="tabpanel"
+        aria-labelledby="tab-search"
+      >
         <QuickSearch />
       </section>
     </template>
+
+    <p class="sr-only" role="status" aria-live="polite">{{ liveMessage }}</p>
   </main>
 </template>
 
@@ -252,6 +348,87 @@ onMounted(async () => {
   padding: 0.85rem;
   font-family: system-ui, sans-serif;
   color: #1a1a1a;
+}
+
+/* --- Identity band -------------------------------------------------------- */
+.brandbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: -0.1rem 0 0.7rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.mark {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  background: #1d4ed8;
+  border-radius: 2px;
+  box-shadow: 3px 3px 0 0 #93c5fd;
+}
+
+.mark.stamping {
+  animation: mark-stamp 220ms ease-out;
+}
+
+@keyframes mark-stamp {
+  0% {
+    transform: scale(1);
+    box-shadow: 3px 3px 0 0 #93c5fd;
+  }
+  45% {
+    transform: scale(0.86);
+    box-shadow: 1px 1px 0 0 #93c5fd;
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 3px 3px 0 0 #93c5fd;
+  }
+}
+
+@keyframes mark-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(22, 163, 74, 0.06);
+  }
+}
+
+.wordmark {
+  font-family:
+    ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  color: #111827;
+}
+
+.status {
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  flex: none;
+}
+
+.status--on {
+  background: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+}
+
+.status--off {
+  background: #9ca3af;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .status--on {
+    animation: mark-breathe 3s ease-in-out infinite;
+  }
 }
 
 h1 {
@@ -265,27 +442,78 @@ h1 {
   margin: 0 0 0.75rem;
 }
 
-.tabs {
-  display: flex;
-  gap: 0.25rem;
-  margin-bottom: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.tabs button {
-  padding: 0.4rem 0.7rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #6b7280;
+.backlink {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 0.55rem;
+  padding: 0.2rem 0.1rem;
+  font-family:
+    ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #1d4ed8;
   background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
   cursor: pointer;
 }
 
+.backlink:hover {
+  text-decoration: underline;
+}
+
+/* --- Segmented tab control --------------------------------------------- */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 0.8rem;
+  padding: 2px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+}
+
+.tabs button {
+  flex: 1;
+  padding: 0.4rem 0.35rem;
+  font-family:
+    ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.tabs button:hover:not(.on) {
+  color: #111827;
+}
+
+.tabs button:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
 .tabs button.on {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
+  color: #fff;
+  background: #1d4ed8;
+  box-shadow: 0 1px 2px rgba(29, 78, 216, 0.35);
 }
 
 .primary {
@@ -293,10 +521,15 @@ h1 {
   font-size: 0.9rem;
   font-weight: 600;
   color: #fff;
-  background: #2563eb;
+  background: #1d4ed8;
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  transition: transform 90ms ease;
+}
+
+.primary:active {
+  transform: translateY(1px) scale(0.985);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -305,13 +538,55 @@ h1 {
     background: #171717;
   }
 
+  .brandbar {
+    border-bottom-color: #2a2a2a;
+  }
+
+  .mark {
+    background: #60a5fa;
+    box-shadow: 3px 3px 0 0 #1e3a8a;
+  }
+
+  @keyframes mark-stamp {
+    0% {
+      transform: scale(1);
+      box-shadow: 3px 3px 0 0 #1e3a8a;
+    }
+    45% {
+      transform: scale(0.86);
+      box-shadow: 1px 1px 0 0 #1e3a8a;
+    }
+    100% {
+      transform: scale(1);
+      box-shadow: 3px 3px 0 0 #1e3a8a;
+    }
+  }
+
+  .wordmark {
+    color: #f3f4f6;
+  }
+
+  .backlink {
+    color: #60a5fa;
+  }
+
+  .tabs button:focus-visible {
+    outline-color: #60a5fa;
+  }
+
   .tabs {
-    border-bottom-color: #333;
+    background: #0f0f0f;
+    border-color: #2a2a2a;
+  }
+
+  .tabs button:hover:not(.on) {
+    color: #f3f4f6;
   }
 
   .tabs button.on {
-    color: #60a5fa;
-    border-bottom-color: #60a5fa;
+    color: #fff;
+    background: #2563eb;
+    box-shadow: none;
   }
 }
 </style>

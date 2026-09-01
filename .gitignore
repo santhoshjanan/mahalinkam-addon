@@ -8,3 +8,9 @@ artifacts
 .DS_Store
 .vite
 coverage
+
+# impeccable — transient state (keep config.json, critique/, live/config.json)
+.impeccable/hook.cache.json
+.impeccable/live/roots.json
+.impeccable/live/sessions/
+.impeccable/live/inject-journal.json

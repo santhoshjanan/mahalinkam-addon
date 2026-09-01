@@ -252,7 +252,7 @@ function open(url: string): void {
   padding: 0.1rem 0.2rem;
   font-size: 0.8rem;
   font-family: inherit;
-  color: #2563eb;
+  color: #1d4ed8;
   background: transparent;
   border: none;
   border-radius: 3px;
@@ -260,7 +260,7 @@ function open(url: string): void {
 }
 
 .crumb:hover {
-  background: #eff6ff;
+  background: #eef3fd;
 }
 
 .crumb.current {
@@ -336,8 +336,8 @@ function open(url: string): void {
 }
 
 .edit:hover {
-  color: #2563eb;
-  border-color: #2563eb;
+  color: #1d4ed8;
+  border-color: #1d4ed8;
 }
 
 .ico,
@@ -401,20 +401,25 @@ function open(url: string): void {
 .hint {
   margin: 0.6rem 0 0;
   font-size: 0.82rem;
-  color: #666;
+  color: #6b7280;
 }
 
 .more {
   margin: 0.5rem 0 0;
-  padding: 0.35rem 0.6rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  font-family: inherit;
-  color: #2563eb;
+  padding: 0.35rem 0.5rem;
+  font-family:
+    ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #1d4ed8;
   background: transparent;
-  border: 1px solid #bfdbfe;
-  border-radius: 4px;
+  border: none;
   cursor: pointer;
+}
+
+.more:hover {
+  text-decoration: underline;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -433,7 +438,7 @@ function open(url: string): void {
   }
 
   .crumb:hover {
-    background: #1e293b;
+    background: #262626;
   }
 
   .row:hover {
@@ -442,7 +447,7 @@ function open(url: string): void {
 
   .edit {
     color: #9ca3af;
-    border-color: #444;
+    border-color: #555;
   }
 
   .edit:hover {
@@ -455,11 +460,10 @@ function open(url: string): void {
   }
 
   .skeleton {
-    background: #333;
+    background: #2e2e2e;
   }
 
   .more {
-    border-color: #1e3a8a;
     color: #60a5fa;
   }
 }
