@@ -1,6 +1,6 @@
 {
   "name": "mahalinkam-chromium",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "mahalinkam WebExtension (MV3) — save the current page to a self-hosted mahalinkam server.",
   "type": "module",
   "private": true,

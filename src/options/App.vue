@@ -88,7 +88,7 @@ async function saveAndVerify(): Promise<void> {
 
 <template>
   <main class="options">
-    <h1>mahalinkam</h1>
+    <h1>Mahalinkam</h1>
 
     <label class="field">
       <span>Server URL</span>
