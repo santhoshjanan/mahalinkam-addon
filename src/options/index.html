@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mahalinkam — Options</title>
+    <style>
+      /* Match the page ground to the theme so dark-mode text isn't left on a
+         white page. .options paints no surface of its own — the body colour
+         is the surface. */
+      :root {
+        color-scheme: light dark;
+      }
+      html,
+      body {
+        margin: 0;
+        background: #fff;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #171717;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>

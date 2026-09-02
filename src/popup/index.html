@@ -4,6 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mahalinkam</title>
+    <style>
+      /* The popup document itself — .popup paints the surface, so html/body
+         only need to drop the UA margin and carry a matching ground colour
+         (and color-scheme) so no light frame shows around the panel in dark
+         mode. */
+      :root {
+        color-scheme: light dark;
+      }
+      html,
+      body {
+        margin: 0;
+        background: #fff;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #171717;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>
