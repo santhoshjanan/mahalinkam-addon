@@ -71,20 +71,27 @@ const isEmpty = computed(
     bookmarks.value.length === 0,
 );
 
-/** The `folder_id` filter for the current scope: a folder id, or `unfiled` at
- *  root (which lists every bookmark not in a folder). */
-const scopeFilter = computed(() =>
-  currentScope.value.kind === 'root' ? 'unfiled' : String(currentScope.value.id),
-);
+/** The `folder_id` filter for a scope: a folder id, or `unfiled` at root (which
+ *  lists every bookmark not in a folder). */
+function filterFor(scope: Scope): string {
+  return scope.kind === 'root' ? 'unfiled' : String(scope.id);
+}
+const scopeFilter = computed(() => filterFor(currentScope.value));
 
 let reqSeq = 0;
-async function loadBookmarks(reset: boolean): Promise<void> {
+/**
+ * `filter` defaults to the current scope, but navigation passes the *target*
+ * scope's filter explicitly: the crumb mutation runs inside an async View
+ * Transition callback, so `scopeFilter` is still one step behind when this is
+ * called synchronously right after `withViewTransition`.
+ */
+async function loadBookmarks(reset: boolean, filter: string = scopeFilter.value): Promise<void> {
   const seq = ++reqSeq;
   loading.value = true;
   error.value = null;
   try {
     const res = await apiClient.listBookmarks({
-      folderId: scopeFilter.value,
+      folderId: filter,
       page: reset ? 1 : page.value,
     });
     if (seq !== reqSeq) return; // a newer navigation superseded this one
@@ -113,23 +120,26 @@ watch(
   { immediate: true },
 );
 
-function enterFolder(node: TreeNode): void {
+function navigate(next: Crumb[], name: 'drill-in' | 'drill-out'): void {
   void withViewTransition(async () => {
-    crumbs.value = [...crumbs.value, { label: node.name, scope: { kind: 'folder', id: node.id } }];
+    crumbs.value = next;
     page.value = 1;
     await nextTick();
-  }, 'drill-in');
-  void loadBookmarks(true);
+  }, name);
+  page.value = 1;
+  void loadBookmarks(true, filterFor(next[next.length - 1].scope));
+}
+
+function enterFolder(node: TreeNode): void {
+  navigate(
+    [...crumbs.value, { label: node.name, scope: { kind: 'folder', id: node.id } }],
+    'drill-in',
+  );
 }
 
 function goToCrumb(index: number): void {
   if (index >= crumbs.value.length - 1) return;
-  void withViewTransition(async () => {
-    crumbs.value = crumbs.value.slice(0, index + 1);
-    page.value = 1;
-    await nextTick();
-  }, 'drill-out');
-  void loadBookmarks(true);
+  navigate(crumbs.value.slice(0, index + 1), 'drill-out');
 }
 
 function loadMore(): void {
